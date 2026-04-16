@@ -142,3 +142,6 @@ The toolkit is fully plugin-based. To add eye tracking, EEG, touchpad, or any ot
 - **MediaPipe Hands** — hand landmark tracking
 - **Canvas 2D API** — color detection + drawing
 - **Vanilla JS ES Modules** — no build step, runs in the browser
+
+## Demo
+<video src="assets/demo.mov" width="100%" controls></video>
