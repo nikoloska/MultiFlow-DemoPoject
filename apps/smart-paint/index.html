@@ -4,254 +4,141 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Smart Paint — MultiFlow Demo</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;800&display=swap" rel="stylesheet">
   <style>
+    :root {
+      --ui-bg: rgba(255, 255, 255, 0.98);
+      --bg-red: #e74c3c; --bg-yellow: #f1c40f; --bg-green: #2ecc71;
+      --bg-blue: #3498db; --bg-black: #1a1a1a; --bg-white: #ffffff;
+    }
+
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      background: #0d1b2a;
-      color: #e2e8f0;
-      height: 100vh;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-    }
-
-    /* ── Header ── */
-    header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 10px 20px;
-      background: #1b3a5c;
-      border-bottom: 1px solid #0d9488;
-      flex-shrink: 0;
-    }
-
-    header h1 {
-      font-size: 1.2rem;
-      font-weight: 700;
-      color: #5eead4;
-      letter-spacing: 0.04em;
-    }
-
-    header .subtitle {
-      font-size: 0.75rem;
-      color: #94a3b8;
-    }
-
-    /* ── Toolbar ── */
-    .toolbar {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 8px 20px;
-      background: #0d1b2a;
-      border-bottom: 1px solid #1b3a5c;
-      flex-shrink: 0;
-      flex-wrap: wrap;
-    }
-
-    button {
-      padding: 7px 16px;
-      border: none;
-      border-radius: 6px;
-      font-size: 0.85rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: opacity 0.15s;
-    }
-    button:disabled { opacity: 0.4; cursor: not-allowed; }
-
-    #btn-start { background: #0d9488; color: #fff; }
-    #btn-stop  { background: #e11d48; color: #fff; }
-    #btn-clear { background: #475569; color: #fff; }
-    #btn-stop  { display: none; }
-    #btn-stop.visible { display: inline-block; }
-
-    .separator { width: 1px; height: 24px; background: #1b3a5c; }
-
-    label.control {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 0.8rem;
-      color: #94a3b8;
-    }
-
-    input[type="color"] {
-      width: 32px; height: 28px;
-      border: none; border-radius: 4px;
-      cursor: pointer; background: none; padding: 0;
-    }
-
-    input[type="range"] { width: 80px; }
-
-    /* ── Status bar ── */
-    .status-bar {
-      display: flex;
-      align-items: center;
-      gap: 16px;
-      padding: 4px 20px;
-      background: #0a1628;
-      font-size: 0.78rem;
-      flex-shrink: 0;
-    }
-
-    #status    { color: #64748b; font-style: italic; }
-    #debug     { color: #334155; font-size: 0.72rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 500px; }
-
-    /* ── Canvas area ── */
-    .canvas-wrap {
-      flex: 1;
-      position: relative;
-      overflow: hidden;
+    body, html {
+      width: 100%; height: 100%; overflow: hidden;
+      background: #111; font-family: 'Inter', sans-serif;
     }
 
     #canvas {
-      width: 100%;
-      height: 100%;
-      display: block;
-      cursor: crosshair;
-      background: #ffffff;
+      position: absolute; top: 0; left: 0;
+      width: 100vw; height: 100vh;
+      background-color: white; z-index: 1; cursor: crosshair;
     }
 
-    /* ── Commands legend ── */
-    .legend {
-      position: absolute;
-      bottom: 16px;
-      left: 16px;
-      background: rgba(13, 27, 42, 0.85);
-      border: 1px solid #1b3a5c;
-      border-radius: 8px;
-      padding: 10px 14px;
-      font-size: 0.75rem;
-      line-height: 1.9;
-      backdrop-filter: blur(4px);
+    /* ── Detection Hub (top center) ── */
+    .detection-hub {
+      position: fixed; top: 0; left: 50%; transform: translateX(-50%);
+      z-index: 20; background: var(--ui-bg); padding: 8px 20px;
+      border-radius: 0 0 30px 30px; display: flex; align-items: center; gap: 15px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.1); border: 1px solid #eee;
     }
 
-    .legend .title {
-      font-weight: 700;
-      color: #14b8a6;
-      margin-bottom: 4px;
+    #webcamVideo {
+      width: 90px; height: 65px; border-radius: 10px;
+      transform: scaleX(-1); border: 2px solid #3498db;
     }
 
-    .legend .cmd { color: #5eead4; font-weight: 600; }
-    .legend .desc { color: #94a3b8; }
-
-    /* ── Active indicator dots ── */
-    .indicators {
-      position: absolute;
-      top: 12px;
-      right: 12px;
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
+    #colorIndicator {
+      width: 50px; height: 50px; border-radius: 50%;
+      border: 3px solid white; box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      background: #ddd;
     }
 
-    .indicator {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 0.72rem;
-      color: #64748b;
+    #colorLabel { font-size: 13px; font-weight: 800; color: #333; }
+
+    /* ── Command Panel (below hub) ── */
+    .command-panel {
+      position: fixed; top: 95px; left: 50%; transform: translateX(-50%);
+      z-index: 10; background: var(--ui-bg); padding: 12px 30px;
+      border-radius: 50px; display: flex; gap: 20px; align-items: center;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.1);
     }
 
-    .dot {
-      width: 8px; height: 8px;
-      border-radius: 50%;
-      background: #334155;
-      transition: background 0.3s;
+    .ui-btn {
+      padding: 10px 18px; border: none; border-radius: 25px;
+      background: #f0f0f0; cursor: pointer; font-weight: 700;
+      font-family: 'Inter', sans-serif; font-size: 0.85rem;
+      transition: opacity 0.15s;
     }
-    .dot.active { background: #0d9488; box-shadow: 0 0 6px #0d9488; }
+    .ui-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .ui-btn.active { background: #3498db; color: white; }
+
+    #modeDisplay {
+      font-weight: 800; padding: 8px 20px; border-radius: 20px;
+      background: #e74c3c; color: white; min-width: 110px; text-align: center;
+      text-transform: uppercase; transition: background 0.3s;
+      font-family: 'Inter', sans-serif;
+    }
+    #modeDisplay.is-painting { background: #2ecc71; }
+
+    /* Hidden but present for JS compatibility */
+    #status, #debug, #brush-size-label { display: none; }
   </style>
 </head>
 <body>
 
-  <header>
-    <div>
-      <h1>MultiFlow — Smart Paint</h1>
-      <div class="subtitle">Voice · Gesture · Color · Fused in Real Time</div>
-    </div>
-    <div style="font-size:0.7rem;color:#475569">Group 2 — Modular Architecture Demo</div>
-  </header>
+  <canvas id="canvas"></canvas>
 
-  <div class="toolbar">
-    <button id="btn-start">▶ Start</button>
-    <button id="btn-stop">■ Stop</button>
-    <button id="btn-clear">✕ Clear</button>
-
-    <div class="separator"></div>
-
-    <label class="control">
-      Brush color
-      <input type="color" id="brush-color" value="#000000" />
-    </label>
-
-    <label class="control">
-      Size
-      <input type="range" id="brush-size" min="1" max="30" value="4" />
-      <span id="brush-size-label">4</span>
-    </label>
+  <!-- Top hub: webcam feed + detected color -->
+  <div class="detection-hub">
+    <video id="webcamVideo" autoplay playsinline></video>
+    <div id="colorIndicator"></div>
+    <div id="colorLabel">WAITING</div>
   </div>
 
-  <div class="status-bar">
-    <span id="status">Click "Start" to begin</span>
-    <span id="debug"></span>
-  </div>
+  <!-- Floating toolbar -->
+  <div class="command-panel">
 
-  <div class="canvas-wrap">
-    <canvas id="canvas"></canvas>
-
-    <div class="legend">
-      <div class="title">Voice Commands</div>
-      <div><span class="cmd">"paint"</span> <span class="desc">+ hand → draw</span></div>
-      <div><span class="cmd">"stop"</span> <span class="desc">→ pause drawing</span></div>
-      <div><span class="cmd">"background"</span> <span class="desc">+ color → set bg</span></div>
-      <div><span class="cmd">"clear"</span> <span class="desc">→ wipe canvas</span></div>
+    <!-- Brush type selector -->
+    <div style="display:flex; gap:8px; border-right:1px solid #ddd; padding-right:15px;">
+      <button class="ui-btn active" id="brush-btn-magic">✨ Magic</button>
+      <button class="ui-btn" id="brush-btn-pencil">✏️</button>
+      <button class="ui-btn" id="brush-btn-eraser">🧽</button>
     </div>
 
-    <div class="indicators">
-      <div class="indicator">
-        <div class="dot" id="dot-voice"></div> Voice
-      </div>
-      <div class="indicator">
-        <div class="dot" id="dot-gesture"></div> Gesture
-      </div>
-      <div class="indicator">
-        <div class="dot" id="dot-color"></div> Color
-      </div>
+    <!-- Mode badge -->
+    <div id="modeDisplay">IDLE</div>
+
+    <!-- Hidden controls kept for main.js compatibility -->
+    <input type="color"  id="brush-color" value="#000000" style="display:none;" />
+    <input type="range"  id="brush-size"  min="1" max="30" value="4" style="display:none;" />
+    <span id="brush-size-label">4</span>
+
+    <!-- Session controls -->
+    <div style="display:flex; gap:10px;">
+      <button id="btn-start" class="ui-btn" style="background:#2ecc71; color:white;">START</button>
+      <button id="btn-stop"  class="ui-btn" style="background:#e74c3c; color:white;" disabled>STOP</button>
+      <button id="btn-clear" class="ui-btn" style="background:#475569; color:white;">RESET</button>
     </div>
   </div>
 
-  <!-- Load app as ES module -->
+  <!-- Hidden status/debug spans for main.js -->
+  <span id="status" style="display:none;"></span>
+  <span id="debug"  style="display:none;"></span>
+
   <script type="module" src="main.js"></script>
 
-  <!-- Simple UI helpers (non-module) -->
   <script>
-    // Brush size label
+    // Brush size passthrough (hidden input still works for main.js)
     document.getElementById("brush-size").addEventListener("input", function () {
       document.getElementById("brush-size-label").textContent = this.value;
     });
 
-    // Toggle stop button visibility
-    document.getElementById("btn-start").addEventListener("click", function () {
-      this.style.display = "none";
-      document.getElementById("btn-stop").style.display = "inline-block";
-    });
-    document.getElementById("btn-stop").addEventListener("click", function () {
-      this.style.display = "none";
-      document.getElementById("btn-start").style.display = "inline-block";
+    // Brush type button group
+    const brushBtns = document.querySelectorAll("#brush-btn-magic, #brush-btn-pencil, #brush-btn-eraser");
+    brushBtns.forEach(btn => {
+      btn.addEventListener("click", function () {
+        brushBtns.forEach(b => b.classList.remove("active"));
+        this.classList.add("active");
+      });
     });
 
-    // Pulse indicator dots when events arrive
-    // These are activated from main.js via window.indicatePulse(source)
+    // Pulse indicator (compatibility hook used by main.js)
     window.indicatePulse = function (source) {
-      const dot = document.getElementById("dot-" + source);
-      if (!dot) return;
-      dot.classList.add("active");
-      clearTimeout(dot._t);
-      dot._t = setTimeout(() => dot.classList.remove("active"), 400);
+      const modeEl = document.getElementById("modeDisplay");
+      modeEl.style.boxShadow = "0 0 12px rgba(52, 152, 219, 0.7)";
+      clearTimeout(modeEl._pt);
+      modeEl._pt = setTimeout(() => { modeEl.style.boxShadow = ""; }, 400);
     };
   </script>
 
