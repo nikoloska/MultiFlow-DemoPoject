@@ -51,6 +51,9 @@ export class VoiceModule {
         };
 
         this.recognition.onerror = (event) => {
+            if (event.error === 'not-allowed') {
+        alert("Microphone access denied! Please enable it in browser settings.");
+    }
             console.error("Speech error:", event.error);
             // Handle specific errors if needed, e.g., 'not-allowed' for microphone access issues
         };
