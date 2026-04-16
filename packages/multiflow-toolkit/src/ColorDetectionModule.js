@@ -92,24 +92,80 @@ export class ColorDetectionModule extends IModalityModule {
 
   // ─── Private ──────────────────────────────────────────────────────────────
 
+  /**
+   * Detect the dominant color of the closest object in frame.
+   *
+   * Strategy:
+   *   1. One getImageData call over the full canvas (efficient).
+   *   2. Sample every STEP pixels. For each sample compute a weight:
+   *        centerWeight  — pixels near the center count more (held objects are
+   *                        usually centered and appear larger when close).
+   *        satWeight     — vivid/saturated pixels count more (objects held up to
+   *                        the camera are more colorful than plain backgrounds).
+   *   3. Accumulate weighted sums into per-name color buckets.
+   *   4. The bucket with the highest total weight is the dominant color.
+   *   5. Emit the actual weighted-average RGB so the indicator shows the real hue.
+   */
   _sample() {
     if (!this._videoElement || this._videoElement.readyState < 2) return;
 
     try {
-      this._ctx.drawImage(
-        this._videoElement,
-        0, 0,
-        this._canvas.width,
-        this._canvas.height
-      );
+      const W = this._canvas.width;
+      const H = this._canvas.height;
 
-      const cx = Math.floor(this._canvas.width / 2);
-      const cy = Math.floor(this._canvas.height / 2);
-      const pixel = this._ctx.getImageData(cx, cy, 1, 1).data;
-      const rgb = { r: pixel[0], g: pixel[1], b: pixel[2] };
-      const name = this._matchColor(rgb);
+      this._ctx.drawImage(this._videoElement, 0, 0, W, H);
 
-      this._emit("color", { name, rgb });
+      const imageData = this._ctx.getImageData(0, 0, W, H).data;
+      const STEP = 6; // sample every 6 pixels — ~(320/6)*(240/6) ≈ 2100 samples
+
+      const buckets = {}; // name → { weight, r, g, b }
+      const cxF = (W - 1) / 2;
+      const cyF = (H - 1) / 2;
+      const maxDist = Math.hypot(cxF, cyF); // corner distance
+
+      for (let py = 0; py < H; py += STEP) {
+        for (let px = 0; px < W; px += STEP) {
+          const idx = (py * W + px) * 4;
+          const r = imageData[idx];
+          const g = imageData[idx + 1];
+          const b = imageData[idx + 2];
+
+          // Saturation weight: vivid colors score higher than grey/white/black
+          const max = Math.max(r, g, b) / 255;
+          const min = Math.min(r, g, b) / 255;
+          const sat = max === 0 ? 0 : (max - min) / max; // HSV saturation [0,1]
+          const satWeight = 1 + sat * 3; // 1 for grey, 4 for fully saturated
+
+          // Center weight: 2× at center, 1× at corners
+          const dist = Math.hypot(px - cxF, py - cyF) / maxDist;
+          const centerWeight = 2 - dist;
+
+          const weight = centerWeight * satWeight;
+
+          const name = this._matchColor({ r, g, b });
+          if (!buckets[name]) buckets[name] = { weight: 0, r: 0, g: 0, b: 0 };
+          buckets[name].weight += weight;
+          buckets[name].r += r * weight;
+          buckets[name].g += g * weight;
+          buckets[name].b += b * weight;
+        }
+      }
+
+      // Dominant color = highest accumulated weight
+      let best = null;
+      for (const [name, data] of Object.entries(buckets)) {
+        if (!best || data.weight > best.weight) best = { name, ...data };
+      }
+
+      if (!best) return;
+
+      const rgb = {
+        r: Math.round(best.r / best.weight),
+        g: Math.round(best.g / best.weight),
+        b: Math.round(best.b / best.weight),
+      };
+
+      this._emit("color", { name: best.name, rgb });
     } catch (e) {
       // Canvas tainted or video not ready — skip this frame
     }

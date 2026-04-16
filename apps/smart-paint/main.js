@@ -34,11 +34,12 @@ const gesture = new GestureModule({
 });
 
 const color = new ColorDetectionModule({
-  intervalMs: 100,
+  intervalMs: 10,
+  videoElement: webcamVideo, 
 });
 
 // ─── 4. Fusion Engine ─────────────────────────────────────────────────────────
-const engine = new FusionEngine({ windowMs: 3000 })
+const engine = new FusionEngine({ windowMs: 500 })
   .register(voice)
   .register(gesture)
   .register(color)
