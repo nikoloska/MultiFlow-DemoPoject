@@ -1,64 +1,144 @@
-# MultiFlow-DemoPoject
+# MultiFlow — A Modular Multimodal Toolkit
 
-## Project Overview
-MultiFlow is an interactive toolkit that combines voice, gesture, and color input modalities into a seamless user experience. It provides a modular and extensible architecture to build multimodal applications.
+> Voice · Gesture · Color — fused in real time.
+> Built as an application-agnostic library: plug in any modality, define your own fusion logic.
 
+**Group 2** — Henri Kangas · Allizha Theiventhiram · Charalampos Filis · Boris Verdecia Echarte · Sandra Nikoloska
+
+---
+
+## What is MultiFlow?
+
+MultiFlow is an interactive toolkit that combines **voice**, **gesture**, and **color** input modalities into a seamless multimodal experience. It is designed as a reusable, extensible library — any application can import it, register the modalities it needs, and define its own fusion rules without touching the toolkit code.
+
+---
+
+## Project Structure
+
+```
+MultiFlow-DemoPoject/
+├── packages/
+│   └── multiflow-toolkit/          ← core library (application-agnostic)
+│       └── src/
+│           ├── IModalityModule.js  ← shared interface all modules implement
+│           ├── VoiceModule.js      ← Web Speech API
+│           ├── GestureModule.js    ← MediaPipe Hands + EMA smoothing
+│           ├── ColorDetectionModule.js  ← RGB sampling + color mapping
+│           ├── FusionEngine.js     ← generic plugin registry + late fusion
+│           └── index.js            ← public exports
+└── apps/
+    └── smart-paint/                ← demo application
+        ├── index.html              ← UI
+        ├── main.js                 ← thin wiring layer
+        ├── fusionRules.js          ← Smart Paint fusion logic
+        └── CanvasRenderer.js       ← all drawing logic
+```
+
+---
 
 ## Architecture
-The project follows a Modular Monolith architecture with a Package-by-Feature organization. It consists of two main parts:
 
-# multiflow-toolkit/- 
-The core library that implements the multimodal input handling and fusion logic.
-# apps/ - 
-Demonstration applications that showcase the capabilities of the toolkit.
-The overall architecture incorporates various design patterns to ensure a maintainable and extensible codebase.
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        PRESENTATION LAYER                       │
+│   index.html · styles.css · CanvasRenderer.js                  │
+│   drawAt() · setBackground() · clear() · Event Listeners       │
+└────────────────────────────┬────────────────────────────────────┘
+                             │ intents
+                             ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                       ORCHESTRATION LAYER                       │
+│                        FusionEngine                             │
+│   register(module) · setFusionRule(fn) · onIntent(cb)          │
+│   ┌──────────────┐  ┌──────────────┐  ┌─────────────────────┐  │
+│   │ Event Buffer │  │ Temporal     │  │ Pluggable Fusion    │  │
+│   │ (all events) │  │ Window (3s)  │  │ Rule (per app)      │  │
+│   └──────────────┘  └──────────────┘  └─────────────────────┘  │
+└──────────┬───────────────────┬────────────────────┬─────────────┘
+           │                   │                    │
+           ▼                   ▼                    ▼
+┌──────────────────┐ ┌──────────────────┐ ┌──────────────────────┐
+│   VoiceModule    │ │  GestureModule   │ │ ColorDetectionModule │
+│                  │ │                  │ │                      │
+│ Web Speech API   │ │ MediaPipe Hands  │ │ Canvas 2D Context    │
+│ Continuous rec.  │ │ EMA Smoothing    │ │ RGB Sampling         │
+│ Commands:        │ │ Coordinate       │ │ Color Mapping        │
+│  "paint"         │ │ Tracking         │ │ Real-time Update     │
+│  "background"    │ │ Movement         │ │ Center Point         │
+│  "stop"          │ │ Detection        │ │ Detection            │
+│  "clear"         │ │                  │ │                      │
+└──────────────────┘ └──────────────────┘ └──────────────────────┘
+         All extend IModalityModule: start() · stop() · onData(cb)
+```
 
+---
 
+## Fusion Strategy
 
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                           PRESENTATION LAYER                               │
-├─────────────────────────────────────────────────────────────────────────────┤
-│  index.html  │  styles.css  │           script.js                          │
-│   (DOM)      │  (Styles)    │    ┌─────────────────────────────────────┐   │
-│              │              │    │  Canvas Rendering Engine           │   │
-│              │              │    │  • drawLine()                       │   │
-│              │              │    │  • setBackground()                  │   │
-│              │              │    │  • clearCanvas()                    │   │
-│              │              │    │  • Event Listeners                  │   │
-│              │              │    └─────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                            │ ▲
-                                            │ │ Events & Commands
-                                            ▼ │
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                         ORCHESTRATION LAYER                                │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                        MultiflowFusionEngine                               │
-│                                                                             │
-│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────────────────┐  │
-│  │  State Manager  │  │  Event Router   │  │    Late Fusion Logic        │  │
-│  │                 │  │                 │  │                             │  │
-│  │ • idle          │  │ • Speech Events │  │ • Temporal Window (3s)      │  │
-│  │ • painting      │  │ • Gesture Data  │  │ • Speech + Color Fusion     │  │
-│  │ • paused        │  │ • Color Updates │  │ • Command Interpretation    │  │
-│  │ • background_set│  │ • UI Commands   │  │ • Context Awareness         │  │
-│  └─────────────────┘  └─────────────────┘  └─────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────────────────┘
-        ▲                           ▲                           ▲
-        │                           │                           │
-        │ handleSpeechCommand()     │ handleGestureData()       │ updateDetectedColor()
-        │                           │                           │
-┌───────────────┐         ┌─────────────────┐         ┌─────────────────────┐
-│               │         │                 │         │                     │
-│  VoiceModule  │         │  GestureModule  │         │ ColorDetectionModule│
-│               │         │                 │         │                     │
-├───────────────┤         ├─────────────────┤         ├─────────────────────┤
-│• Web Speech   │         │• MediaPipe      │         │• Canvas 2D Context  │
-│  API          │         │  Hands          │         │• RGB Sampling       │
-│• Continuous   │         │• EMA Smoothing  │         │• Color Mapping      │
-│  Recognition  │         │• Coordinate     │         │• Real-time Update   │
-│• Commands:    │         │  Tracking       │         │• Center Point       │
-│  - "paint"    │         │• Movement       │         │  Detection          │
-│  - "background│         │  Detection      │         │                     │
-│  - "stop"     │         │• Gesture Params │         │                     │
-│  - "clear"    │         │  Configuration  │         │                
+MultiFlow uses **Late Fusion** (decision-level):
+
+1. Each modality is processed **independently** — no cross-module dependencies
+2. All events are buffered in a **3-second temporal window**
+3. A **pluggable fusion rule** (defined by the app, not the toolkit) inspects the buffer and resolves a user intent
+4. Multimodal validation: certain commands (e.g. `"background"`) require at least two modalities active simultaneously
+
+```
+Speech → "background"  ┐
+                        ├─ FusionEngine ──→ { intent: "setBackground", color: "red" }
+Color  → "red"         ┘
+```
+
+---
+
+## How to Run
+
+You need a local HTTP server (ES modules don't work from `file://`).
+
+**Python** (no install needed):
+```bash
+cd apps/smart-paint
+python3 -m http.server 8080
+```
+Open: **http://localhost:8080**
+
+**Node.js:**
+```bash
+npx serve apps/smart-paint -p 8080
+```
+
+**VS Code:** right-click `apps/smart-paint/index.html` → Open with Live Server
+
+---
+
+## Voice Commands (Smart Paint)
+
+| Command | Action |
+|---------|--------|
+| `"paint"` + hand gesture | Draw on canvas using hand position |
+| `"stop"` | Pause drawing |
+| `"background"` + color in frame | Set canvas background to detected color |
+| `"clear"` | Wipe the canvas |
+
+---
+
+## How to Add a New Modality
+
+The toolkit is fully plugin-based. To add eye tracking, EEG, touchpad, or any other input:
+
+1. Create `packages/multiflow-toolkit/src/EyeTrackingModule.js`
+2. Extend `IModalityModule`
+3. Implement `start()`, `stop()`, emit events via `this._emit(type, payload)`
+4. Export it from `index.js`
+5. In your app: `engine.register(new EyeTrackingModule())`
+6. Handle it in your fusion rule
+
+**Zero changes to the toolkit or other modules.**
+
+---
+
+## Tech Stack
+
+- **Web Speech API** — voice recognition
+- **MediaPipe Hands** — hand landmark tracking
+- **Canvas 2D API** — color detection + drawing
+- **Vanilla JS ES Modules** — no build step, runs in the browser
