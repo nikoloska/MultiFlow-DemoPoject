@@ -14,26 +14,29 @@
 import { FusionEngine, VoiceModule, GestureModule, ColorDetectionModule }
   from "../../packages/multiflow-toolkit/src/index.js";
 
-import { smartPaintFusionRule, continuousDrawRule }
+import { smartPaintFusionRule }
   from "./fusionRules.js";
 
 import { CanvasRenderer }
   from "./CanvasRenderer.js";
 
-// ─── 1. Canvas ────────────────────────────────────────────────────────────────
+// ─── 1. Canvas & Shared Video Source ──────────────────────────────────────────
 const canvas = new CanvasRenderer(document.getElementById("canvas"));
+const sharedVideo = document.getElementById("webcamVideo");
 
-// ─── 2. Modalities ────────────────────────────────────────────────────────────
+// ─── 2. Modalities (Shared Video to prevent multiple cameras) ─────────────────
 const voice = new VoiceModule({
   commands: ["paint", "stop", "clear", "background"],
 });
 
 const gesture = new GestureModule({
   smoothing: 0.4,
+  videoElement: sharedVideo, 
 });
 
 const color = new ColorDetectionModule({
   intervalMs: 150,
+  videoElement: sharedVideo, 
 });
 
 // ─── 3. Fusion Engine ─────────────────────────────────────────────────────────
@@ -45,11 +48,23 @@ const engine = new FusionEngine({ windowMs: 3000 })
   .register(color)
   .setFusionRule(smartPaintFusionRule);
 
-// Optional: also log raw events to the debug panel
+// ─── 4. Raw Event Feedback (Fixes Color Indicator & Debug) ────────────────────
 engine.onRawEvent((event) => {
+  if (event.type === "color") {
+    const indicator = document.getElementById("colorIndicator");
+    const label = document.getElementById("colorLabel");
+    if (indicator) {
+      indicator.style.backgroundColor = `rgb(${event.payload.rgb.r},${event.payload.rgb.g},${event.payload.rgb.b})`;
+    }
+    if (label) {
+      label.textContent = event.payload.name.toUpperCase();
+    }
+  }
+
+  // Debug панел (опционално)
   const debugEl = document.getElementById("debug");
   if (debugEl) {
-    debugEl.textContent = `[${event.source}] ${event.type}: ${JSON.stringify(event.payload).slice(0, 60)}`;
+    debugEl.textContent = `[${event.source}] ${event.type}: ${JSON.stringify(event.payload).slice(0, 40)}`;
   }
 });
 
@@ -57,18 +72,31 @@ engine.onRawEvent((event) => {
 // Map resolved intents → canvas actions.
 // This is the ONLY place that connects the toolkit output to the UI.
 engine.onIntent(({ intent, ...args }) => {
+  const modeDisplay = document.getElementById("modeDisplay");
+
   switch (intent) {
     case "draw":
-    case "continuousDraw":
       canvas.drawAt(args.x, args.y);
+      if (modeDisplay) {
+        modeDisplay.textContent = "PAINTING";
+        modeDisplay.classList.add("is-painting");
+      }
       break;
 
     case "activateDraw":
       canvas.activateDraw();
+      if (modeDisplay) {
+        modeDisplay.textContent = "PAINTING";
+        modeDisplay.classList.add("is-painting");
+      }
       break;
 
     case "stopDraw":
       canvas.stopDraw();
+      if (modeDisplay) {
+        modeDisplay.textContent = "IDLE";
+        modeDisplay.classList.remove("is-painting");
+      }
       break;
 
     case "setBackground":
@@ -77,35 +105,37 @@ engine.onIntent(({ intent, ...args }) => {
 
     case "clear":
       canvas.clear();
+      if (modeDisplay) {
+        modeDisplay.textContent = "IDLE";
+        modeDisplay.classList.remove("is-painting");
+      }
       break;
   }
 });
 
-// ─── 5. Also handle continuous gesture drawing directly ───────────────────────
-// Run the continuous draw rule too, so gestures draw in real time once "paint" spoken
-const continuousEngine = new FusionEngine({ windowMs: 3000 })
-  .register(voice)
-  .register(gesture)
-  .setFusionRule(continuousDrawRule);
-
-continuousEngine.onIntent(({ intent, ...args }) => {
-  if (intent === "continuousDraw") canvas.drawAt(args.x, args.y);
-});
-
-// ─── 6. UI controls ───────────────────────────────────────────────────────────
+// ─── 6. UI Controls ───────────────────────────────────────────────────────────
 document.getElementById("btn-start")?.addEventListener("click", async () => {
   document.getElementById("btn-start").disabled = true;
   document.getElementById("btn-stop").disabled  = false;
   await engine.startAll();
-  document.getElementById("status").textContent = "Listening...";
-  document.getElementById("status").style.color = "gray";
+  
+  const statusEl = document.getElementById("status");
+  if (statusEl) {
+    statusEl.textContent = "Listening...";
+    statusEl.style.color = "green";
+  }
 });
 
 document.getElementById("btn-stop")?.addEventListener("click", () => {
   engine.stopAll();
   document.getElementById("btn-start").disabled = false;
   document.getElementById("btn-stop").disabled  = true;
-  document.getElementById("status").textContent = "Stopped.";
+  
+  const modeDisplay = document.getElementById("modeDisplay");
+  if (modeDisplay) {
+    modeDisplay.textContent = "STOPPED";
+    modeDisplay.classList.remove("is-painting");
+  }
 });
 
 document.getElementById("btn-clear")?.addEventListener("click", () => {
