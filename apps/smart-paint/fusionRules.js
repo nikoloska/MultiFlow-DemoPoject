@@ -4,6 +4,10 @@
  * This lives in the APP, not the toolkit.
  * It defines what combinations of modality events mean for THIS application.
  *
+ * NOTE: Continuous drawing is NOT handled here — it is managed by a direct
+ * gesture listener in main.js that checks `isPainting` app state. This avoids
+ * the fusion window expiring mid-stroke and stopping drawing after 3 seconds.
+ *
  * @param {Array} buffer - array of recent events from the FusionEngine
  * @returns {{ intent: string, ...args } | null}
  */
@@ -12,10 +16,8 @@ export function smartPaintFusionRule(buffer) {
   const last = (source, type) =>
     [...buffer].reverse().find((e) => e.source === source && e.type === type);
 
-  const voiceCmd  = last("voice",   "command");
-  const color     = last("color",   "color");
-  const position  = last("gesture", "position");
-  const handLost  = last("gesture", "handLost");
+  const voiceCmd = last("voice", "command");
+  const color    = last("color", "color");
 
   if (!voiceCmd) return null;
 
@@ -23,19 +25,23 @@ export function smartPaintFusionRule(buffer) {
 
   switch (cmd) {
     case "paint":
-      // "paint" + active hand position → draw at that position
-      if (position) {
-        return { intent: "draw", x: position.payload.x, y: position.payload.y };
+      // Activate drawing mode; pass detected color for late fusion (applied in main.js).
+      // Continuous drawing is handled by the direct gesture listener in main.js.
+      return { intent: "activateDraw", color: color ? color.payload : null };
+
+    case "color":
+      // Change brush color to whatever is currently in front of the camera
+      if (color) {
+        return { intent: "changeColor", color: color.payload };
       }
-      // "paint" alone → just activate drawing mode
-      return { intent: "activateDraw" };
+      return null;
 
     case "background":
       // "background" + detected color → set canvas background
       if (color) {
         return { intent: "setBackground", color: color.payload.name, rgb: color.payload.rgb };
       }
-      return null; // need a color to set background
+      return null;
 
     case "stop":
       return { intent: "stopDraw" };
@@ -46,27 +52,4 @@ export function smartPaintFusionRule(buffer) {
     default:
       return null;
   }
-}
-
-/**
- * drawingFusionRule — continuously draws while in "paint" state.
- * Used as a secondary rule that runs on every gesture position event.
- *
- * @param {Array} buffer
- * @returns {{ intent: string, ...args } | null}
- */
-export function continuousDrawRule(buffer) {
-  // Find most recent events
-  const last = (source, type) =>
-    [...buffer].reverse().find((e) => e.source === source && e.type === type);
-
-  const position = last("gesture", "position");
-  const voiceCmd = last("voice",   "command");
-
-  // Only draw if the last voice command was "paint" (not "stop" or "clear")
-  if (position && voiceCmd && voiceCmd.payload.command === "paint") {
-    return { intent: "continuousDraw", x: position.payload.x, y: position.payload.y };
-  }
-
-  return null;
 }

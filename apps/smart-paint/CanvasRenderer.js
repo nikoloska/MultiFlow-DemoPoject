@@ -14,7 +14,9 @@ export class CanvasRenderer {
     this._lastY = null;
     this._brushColor = "#000000";
     this._brushSize = 4;
+    this._brushType = "magic"; // 'magic' | 'pencil' | 'eraser'
     this._background = "#ffffff";
+    this._strokeHistory = []; // pixel coords for current stroke (circle detection)
 
     this._resize();
     window.addEventListener("resize", () => this._resize());
@@ -27,24 +29,51 @@ export class CanvasRenderer {
   drawAt(normX, normY) {
     const x = normX * this._canvas.width;
     const y = normY * this._canvas.height;
+    const ctx = this._ctx;
 
-    this._ctx.strokeStyle = this._brushColor;
-    this._ctx.lineWidth = this._brushSize;
-    this._ctx.lineCap = "round";
-    this._ctx.lineJoin = "round";
+    // Track stroke history for shape detection (not for eraser)
+    if (this._brushType !== "eraser") {
+      this._strokeHistory.push({ x, y });
+    }
+
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+
+    if (this._brushType === "eraser") {
+      ctx.globalCompositeOperation = "destination-out";
+      ctx.lineWidth = 60;
+      ctx.shadowBlur = 0;
+    } else if (this._brushType === "magic") {
+      ctx.globalCompositeOperation = "source-over";
+      ctx.strokeStyle = this._brushColor;
+      ctx.shadowBlur = 15;
+      ctx.shadowColor = this._brushColor;
+      ctx.lineWidth = 8 + Math.random() * 5;
+    } else {
+      // pencil
+      ctx.globalCompositeOperation = "source-over";
+      ctx.strokeStyle = this._brushColor;
+      ctx.shadowBlur = 0;
+      ctx.lineWidth = this._brushSize;
+    }
 
     if (this._lastX !== null && this._isDrawing) {
-      this._ctx.beginPath();
-      this._ctx.moveTo(this._lastX, this._lastY);
-      this._ctx.lineTo(x, y);
-      this._ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(this._lastX, this._lastY);
+      ctx.lineTo(x, y);
+      ctx.stroke();
     } else {
       // Draw a dot for single-frame touch
-      this._ctx.beginPath();
-      this._ctx.arc(x, y, this._brushSize / 2, 0, Math.PI * 2);
-      this._ctx.fillStyle = this._brushColor;
-      this._ctx.fill();
+      ctx.globalCompositeOperation = "source-over";
+      ctx.beginPath();
+      ctx.arc(x, y, (ctx.lineWidth || this._brushSize) / 2, 0, Math.PI * 2);
+      ctx.fillStyle = this._brushType === "eraser" ? "rgba(0,0,0,1)" : this._brushColor;
+      ctx.fill();
     }
+
+    // Reset composite/shadow so other drawing isn't affected
+    ctx.globalCompositeOperation = "source-over";
+    ctx.shadowBlur = 0;
 
     this._lastX = x;
     this._lastY = y;
@@ -56,14 +85,17 @@ export class CanvasRenderer {
     this._isDrawing = true;
     this._lastX = null;
     this._lastY = null;
-    this._showStatus("Drawing mode ON", "green");
+    this._strokeHistory = [];
+    this._showStatus("Drawing mode ON", "#2ecc71");
   }
 
-  /** Stop drawing mode. */
+  /** Stop drawing mode — check for circle and draw golden sun if detected. */
   stopDraw() {
+    this._checkAndDrawSun(this._strokeHistory);
     this._isDrawing = false;
     this._lastX = null;
     this._lastY = null;
+    this._strokeHistory = [];
     this._showStatus("Drawing mode OFF", "gray");
   }
 
@@ -75,11 +107,12 @@ export class CanvasRenderer {
       this._background = colorName;
     }
     this._fillBackground();
-    this._showStatus(`Background: ${colorName}`, "blue");
+    this._showStatus(`Background: ${colorName}`, "#3498db");
   }
 
   /** Clear the canvas. */
   clear() {
+    this._strokeHistory = [];
     this._fillBackground();
     this._isDrawing = false;
     this._lastX = null;
@@ -97,7 +130,58 @@ export class CanvasRenderer {
     this._brushSize = Math.max(1, size);
   }
 
+  /** Set brush type: 'magic' | 'pencil' | 'eraser' */
+  setBrushType(type) {
+    this._brushType = type;
+  }
+
   // ─── Private ──────────────────────────────────────────────────────────────
+
+  /**
+   * If the stroke looks like a closed circle, draw a golden sun at its center.
+   * Matches baseDemo logic exactly.
+   */
+  _checkAndDrawSun(points) {
+    if (points.length < 15) return;
+    const xs = points.map((p) => p.x);
+    const ys = points.map((p) => p.y);
+    const minX = Math.min(...xs), maxX = Math.max(...xs);
+    const minY = Math.min(...ys), maxY = Math.max(...ys);
+    const w = maxX - minX, h = maxY - minY;
+    const dist = Math.hypot(
+      points[0].x - points[points.length - 1].x,
+      points[0].y - points[points.length - 1].y
+    );
+
+    // Closed-ish circle: start/end close together, width/height similar, not too small
+    if (dist < 120 && Math.abs(w - h) < 100 && w > 40) {
+      const cx = minX + w / 2;
+      const cy = minY + h / 2;
+      const r = w / 3;
+      const ctx = this._ctx;
+
+      ctx.globalCompositeOperation = "source-over";
+      ctx.shadowBlur = 0;
+
+      // Sun body
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.fillStyle = "#FFD700";
+      ctx.fill();
+      ctx.strokeStyle = "#FFA500";
+      ctx.lineWidth = 4;
+      ctx.stroke();
+
+      // Sun rays
+      for (let i = 0; i < 8; i++) {
+        const a = i * (Math.PI / 4);
+        ctx.beginPath();
+        ctx.moveTo(cx + Math.cos(a) * r, cy + Math.sin(a) * r);
+        ctx.lineTo(cx + Math.cos(a) * (r + 20), cy + Math.sin(a) * (r + 20));
+        ctx.stroke();
+      }
+    }
+  }
 
   _fillBackground() {
     this._ctx.fillStyle = this._background;

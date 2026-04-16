@@ -134,7 +134,9 @@ export class GestureModule extends IModalityModule {
           this._emit("handFound", { landmarks });
         }
 
-        const smoothed = this._applyEMA({ x: tip.x, y: tip.y });
+        // Mirror X because the video feed is displayed with scaleX(-1)
+        // so drawing follows the finger in the mirrored view
+        const smoothed = this._applyEMA({ x: 1 - tip.x, y: tip.y });
         this._emit("position", smoothed);
       } else {
         if (this._handPresent) {

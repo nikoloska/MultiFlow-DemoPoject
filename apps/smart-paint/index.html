@@ -22,10 +22,11 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 10px 20px;
+      padding: 8px 20px;
       background: #1b3a5c;
       border-bottom: 1px solid #0d9488;
       flex-shrink: 0;
+      gap: 12px;
     }
 
     header h1 {
@@ -40,12 +41,68 @@
       color: #94a3b8;
     }
 
+    /* ── Camera + color detection hub (top-right of header) ── */
+    .detection-hub {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: rgba(0,0,0,0.25);
+      border-radius: 10px;
+      padding: 6px 12px;
+      border: 1px solid #1b3a5c;
+    }
+
+    #webcam-video {
+      width: 90px;
+      height: 65px;
+      border-radius: 8px;
+      transform: scaleX(-1);
+      border: 2px solid #0d9488;
+      object-fit: cover;
+      display: none; /* shown once camera starts */
+    }
+
+    #color-dot {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: #1b3a5c;
+      border: 2px solid #475569;
+      transition: background 0.3s;
+      flex-shrink: 0;
+    }
+
+    #color-label {
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: #94a3b8;
+      text-transform: uppercase;
+      min-width: 40px;
+    }
+
+    #mode-display {
+      font-size: 0.72rem;
+      font-weight: 900;
+      padding: 4px 12px;
+      border-radius: 20px;
+      background: #334155;
+      color: #94a3b8;
+      text-transform: uppercase;
+      transition: background 0.3s, color 0.3s;
+      white-space: nowrap;
+    }
+    #mode-display.painting {
+      background: #14532d;
+      color: #4ade80;
+      box-shadow: 0 0 8px rgba(74, 222, 128, 0.4);
+    }
+
     /* ── Toolbar ── */
     .toolbar {
       display: flex;
       align-items: center;
-      gap: 12px;
-      padding: 8px 20px;
+      gap: 10px;
+      padding: 7px 20px;
       background: #0d1b2a;
       border-bottom: 1px solid #1b3a5c;
       flex-shrink: 0;
@@ -53,23 +110,34 @@
     }
 
     button {
-      padding: 7px 16px;
+      padding: 7px 14px;
       border: none;
       border-radius: 6px;
-      font-size: 0.85rem;
+      font-size: 0.82rem;
       font-weight: 600;
       cursor: pointer;
-      transition: opacity 0.15s;
+      transition: opacity 0.15s, background 0.15s;
     }
     button:disabled { opacity: 0.4; cursor: not-allowed; }
 
     #btn-start { background: #0d9488; color: #fff; }
-    #btn-stop  { background: #e11d48; color: #fff; }
-    #btn-clear { background: #475569; color: #fff; }
-    #btn-stop  { display: none; }
+    #btn-stop  { background: #e11d48; color: #fff; display: none; }
     #btn-stop.visible { display: inline-block; }
+    #btn-clear { background: #475569; color: #fff; }
 
-    .separator { width: 1px; height: 24px; background: #1b3a5c; }
+    /* ── Brush type buttons ── */
+    .brush-btn {
+      background: #1b3a5c;
+      color: #94a3b8;
+      border: 1px solid #334155;
+    }
+    .brush-btn.active {
+      background: #0d9488;
+      color: #fff;
+      border-color: #0d9488;
+    }
+
+    .separator { width: 1px; height: 24px; background: #1b3a5c; flex-shrink: 0; }
 
     label.control {
       display: flex;
@@ -173,6 +241,15 @@
       <h1>MultiFlow — Smart Paint</h1>
       <div class="subtitle">Voice · Gesture · Color · Fused in Real Time</div>
     </div>
+
+    <!-- Detection hub: live camera feed + color indicator + mode -->
+    <div class="detection-hub">
+      <video id="webcam-video" autoplay playsinline></video>
+      <div id="color-dot"></div>
+      <span id="color-label">—</span>
+      <div id="mode-display">IDLE</div>
+    </div>
+
     <div style="font-size:0.7rem;color:#475569">Group 2 — Modular Architecture Demo</div>
   </header>
 
@@ -180,6 +257,13 @@
     <button id="btn-start">▶ Start</button>
     <button id="btn-stop">■ Stop</button>
     <button id="btn-clear">✕ Clear</button>
+
+    <div class="separator"></div>
+
+    <!-- Brush type selection -->
+    <button class="brush-btn active" id="brush-magic">✨ Magic</button>
+    <button class="brush-btn" id="brush-pencil">✏️ Pencil</button>
+    <button class="brush-btn" id="brush-eraser">🧽 Eraser</button>
 
     <div class="separator"></div>
 
@@ -205,10 +289,12 @@
 
     <div class="legend">
       <div class="title">Voice Commands</div>
-      <div><span class="cmd">"paint"</span> <span class="desc">+ hand → draw</span></div>
-      <div><span class="cmd">"stop"</span> <span class="desc">→ pause drawing</span></div>
+      <div><span class="cmd">"paint"</span> <span class="desc">→ start drawing (uses detected color)</span></div>
+      <div><span class="cmd">"stop"</span> <span class="desc">→ stop drawing</span></div>
+      <div><span class="cmd">"color"</span> <span class="desc">→ change pen to detected color</span></div>
       <div><span class="cmd">"background"</span> <span class="desc">+ color → set bg</span></div>
       <div><span class="cmd">"clear"</span> <span class="desc">→ wipe canvas</span></div>
+      <div style="margin-top:6px;color:#475569;font-size:0.7rem;">Draw a circle → golden sun ☀️</div>
     </div>
 
     <div class="indicators">
@@ -234,7 +320,7 @@
       document.getElementById("brush-size-label").textContent = this.value;
     });
 
-    // Toggle stop button visibility
+    // Toggle start/stop button visibility
     document.getElementById("btn-start").addEventListener("click", function () {
       this.style.display = "none";
       document.getElementById("btn-stop").style.display = "inline-block";
@@ -244,8 +330,15 @@
       document.getElementById("btn-start").style.display = "inline-block";
     });
 
-    // Pulse indicator dots when events arrive
-    // These are activated from main.js via window.indicatePulse(source)
+    // Brush type button toggle
+    document.querySelectorAll(".brush-btn").forEach((btn) => {
+      btn.addEventListener("click", function () {
+        document.querySelectorAll(".brush-btn").forEach((b) => b.classList.remove("active"));
+        this.classList.add("active");
+      });
+    });
+
+    // Pulse indicator dots — called from main.js via window.indicatePulse(source)
     window.indicatePulse = function (source) {
       const dot = document.getElementById("dot-" + source);
       if (!dot) return;
