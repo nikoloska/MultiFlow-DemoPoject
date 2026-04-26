@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cuisine Helper — MultiFlow</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --cream:    #F5F0E8;
+      --ink:      #1A1612;
+      --warm:     #C8A96E;
+      --warm-lt:  #E8D5B0;
+      --warm-dk:  #8B6F3E;
+      --surface:  #FEFCF8;
+      --muted:    #8A8278;
+      --accent:   #D4652A;
+      --accent2:  #3B7A6B;
+      --border:   rgba(26,22,18,0.1);
+      --card-bg:  #FFFFFF;
+      --r:        16px;
+    }
+
+    html, body { height: 100%; background: var(--cream); color: var(--ink);
+      font-family: 'DM Sans', sans-serif; font-weight: 400; overflow: hidden; }
+
+    body::before {
+      content: ''; position: fixed; inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+      pointer-events: none; z-index: 0;
+    }
+
+    .layout {
+      position: relative; z-index: 1; height: 100vh;
+      display: grid; grid-template-rows: auto 1fr auto;
+      max-width: 1100px; margin: 0 auto; padding: 0 24px;
+    }
+
+    /* ── Header ── */
+    header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 18px 0 14px; border-bottom: 1px solid var(--border); gap: 16px;
+    }
+
+    .brand { display: flex; align-items: baseline; gap: 10px; }
+
+    .brand-title {
+      font-family: 'Playfair Display', serif; font-size: 1.5rem;
+      font-weight: 700; letter-spacing: -0.02em;
+    }
+
+    .brand-sub {
+      font-size: 0.68rem; font-weight: 500; letter-spacing: 0.12em;
+      text-transform: uppercase; color: var(--muted);
+    }
+
+    .hub {
+      display: flex; align-items: center; gap: 12px;
+      background: var(--card-bg); border: 1px solid var(--border);
+      border-radius: 50px; padding: 6px 14px 6px 6px;
+    }
+
+    #webcam-video {
+      width: 56px; height: 42px; border-radius: 30px;
+      transform: scaleX(-1); object-fit: cover; display: none;
+      border: 2px solid var(--warm-lt);
+    }
+
+    .color-pill { display: flex; align-items: center; gap: 6px; }
+
+    #color-dot {
+      width: 20px; height: 20px; border-radius: 50%;
+      background: var(--warm-lt); border: 1.5px solid var(--border);
+      transition: background 0.2s; flex-shrink: 0;
+    }
+
+    #color-label {
+      font-size: 0.68rem; font-weight: 500; letter-spacing: 0.1em;
+      text-transform: uppercase; color: var(--muted); min-width: 38px;
+    }
+
+    .hub-divider { width: 1px; height: 20px; background: var(--border); }
+
+    .indicators { display: flex; gap: 8px; }
+
+    .ind {
+      display: flex; align-items: center; gap: 4px;
+      font-size: 0.65rem; font-weight: 500; letter-spacing: 0.08em;
+      text-transform: uppercase; color: var(--muted);
+    }
+
+    .ind-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--border); transition: background 0.15s, box-shadow 0.15s;
+    }
+
+    .ind-dot.pulse { background: var(--accent2); box-shadow: 0 0 6px var(--accent2); }
+
+    .btn {
+      font-family: 'DM Sans', sans-serif; font-size: 0.78rem; font-weight: 500;
+      padding: 8px 18px; border-radius: 50px; border: none; cursor: pointer;
+      transition: opacity 0.15s, transform 0.1s; letter-spacing: 0.03em;
+    }
+
+    .btn:active { transform: scale(0.97); }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-primary { background: var(--ink); color: var(--cream); }
+    .btn-ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+    .btn-ghost:hover { background: var(--card-bg); }
+
+    /* ── Filter badge ── */
+    #filter-badge {
+      display: none; align-items: center; gap: 6px;
+      font-size: 0.72rem; font-weight: 500;
+      padding: 5px 10px 5px 12px; border-radius: 50px;
+      background: var(--accent); color: #fff; letter-spacing: 0.04em;
+    }
+
+    .badge-clear { cursor: pointer; opacity: 0.7; font-size: 0.85rem; }
+    .badge-clear:hover { opacity: 1; }
+
+    /* ── Main ── */
+    .main {
+      display: grid; grid-template-columns: 250px 1fr;
+      gap: 24px; padding: 20px 0; overflow: hidden;
+    }
+
+    /* ── Sidebar ── */
+    .sidebar { display: flex; flex-direction: column; gap: 12px; overflow-y: auto; }
+
+    .sidebar-label {
+      font-size: 0.63rem; font-weight: 500; letter-spacing: 0.14em;
+      text-transform: uppercase; color: var(--muted); padding-left: 2px;
+    }
+
+    .cuisine-filters { display: flex; flex-direction: column; gap: 5px; }
+
+    .cuisine-chip {
+      display: flex; align-items: center; gap: 10px; padding: 9px 13px;
+      border-radius: 10px; border: 1.5px solid transparent;
+      background: var(--card-bg); cursor: pointer;
+      font-family: 'DM Sans', sans-serif; font-size: 0.82rem;
+      font-weight: 400; color: var(--ink); transition: all 0.15s; text-align: left;
+    }
+
+    .cuisine-chip:hover { border-color: var(--warm-lt); background: var(--surface); }
+    .cuisine-chip.active { border-color: var(--warm); background: #FDF6EC; font-weight: 500; }
+    .chip-flag { font-size: 1rem; line-height: 1; }
+    .chip-name { flex: 1; }
+    .chip-count { font-size: 0.68rem; color: var(--muted); }
+
+    /* ── Combo status card ── */
+    .combo-card {
+      background: var(--card-bg); border: 1.5px solid var(--warm-lt);
+      border-radius: var(--r); padding: 13px 14px;
+    }
+
+    .combo-title {
+      font-size: 0.63rem; font-weight: 500; letter-spacing: 0.14em;
+      text-transform: uppercase; color: var(--muted); margin-bottom: 8px;
+    }
+
+    #combo-status {
+      font-size: 0.8rem; color: var(--warm-dk); font-weight: 500;
+      min-height: 20px; line-height: 1.5; transition: color 0.2s;
+    }
+
+    /* ── Hint card ── */
+    .hint-card {
+      background: var(--card-bg); border: 1px solid var(--border);
+      border-radius: var(--r); padding: 13px 14px;
+    }
+
+    .hint-title {
+      font-size: 0.63rem; font-weight: 500; letter-spacing: 0.14em;
+      text-transform: uppercase; color: var(--muted); margin-bottom: 10px;
+    }
+
+    .hint-badge {
+      display: inline-block; font-size: 0.6rem; font-weight: 600;
+      letter-spacing: 0.08em; text-transform: uppercase;
+      padding: 2px 8px; border-radius: 20px; margin-bottom: 7px;
+    }
+
+    .badge-duo  { background: #EEF4FB; color: #4A7FA5; }
+    .badge-trio { background: #EDF7F2; color: #3B7A6B; }
+
+    .hint-row {
+      display: flex; align-items: flex-start; gap: 8px;
+      margin-bottom: 8px; font-size: 0.76rem; line-height: 1.45;
+    }
+
+    .hint-icon { font-size: 0.88rem; flex-shrink: 0; margin-top: 1px; }
+    .hint-cmd { font-weight: 500; color: var(--accent); display: block; }
+    .hint-desc { color: var(--muted); font-size: 0.7rem; }
+
+    /* ── Recipe area ── */
+    .recipe-area { display: flex; flex-direction: column; gap: 14px; overflow: hidden; }
+
+    .recipe-meta {
+      display: flex; align-items: center;
+      justify-content: space-between; gap: 12px;
+    }
+
+    .recipe-cuisine-tag {
+      font-size: 0.65rem; font-weight: 500; letter-spacing: 0.14em;
+      text-transform: uppercase; color: var(--warm-dk);
+      background: #F5EDD8; padding: 4px 12px; border-radius: 50px;
+    }
+
+    .recipe-counter { font-size: 0.72rem; color: var(--muted); }
+
+    #recipe-card {
+      flex: 1; background: var(--card-bg); border: 1.5px solid transparent;
+      border-radius: 20px; padding: 36px 44px;
+      display: flex; flex-direction: column; gap: 18px;
+      transition: border-color 0.35s; overflow: hidden;
+      box-shadow: 0 2px 20px rgba(0,0,0,0.04); position: relative;
+    }
+
+    #recipe-card::before {
+      content: ''; position: absolute; top: 0; right: 0;
+      width: 140px; height: 140px;
+      background: radial-gradient(circle at top right, #F5EDD8 0%, transparent 70%);
+      border-radius: 0 20px 0 0; pointer-events: none;
+    }
+
+    .recipe-title-wrap {
+      display: flex; align-items: flex-start;
+      justify-content: space-between; gap: 16px;
+    }
+
+    #recipe-title {
+      font-family: 'Playfair Display', serif; font-size: 2.2rem;
+      font-weight: 700; line-height: 1.15; letter-spacing: -0.02em; color: var(--ink);
+    }
+
+    .step-badge {
+      flex-shrink: 0; background: var(--ink); color: var(--cream);
+      font-size: 0.7rem; font-weight: 500; padding: 6px 14px;
+      border-radius: 50px; letter-spacing: 0.06em; margin-top: 6px;
+    }
+
+    .step-content { flex: 1; display: flex; align-items: center; }
+
+    #recipe-step {
+      font-size: 1.18rem; font-weight: 300; line-height: 1.7;
+      color: var(--ink); max-width: 540px;
+      font-family: 'Playfair Display', serif; font-style: italic;
+    }
+
+    #step-dots { display: flex; gap: 6px; align-items: center; }
+
+    .step-dot {
+      display: block; width: 6px; height: 6px; border-radius: 50%;
+      background: var(--warm-lt); transition: all 0.25s;
+    }
+
+    .step-dot.active { width: 22px; border-radius: 3px; background: var(--warm); }
+
+    /* ── Nav row ── */
+    .nav-row {
+      display: flex; align-items: center;
+      justify-content: space-between; gap: 12px;
+    }
+
+    .nav-btn {
+      display: flex; align-items: center; gap: 8px;
+      font-family: 'DM Sans', sans-serif; font-size: 0.8rem; font-weight: 500;
+      padding: 10px 20px; border-radius: 50px;
+      border: 1.5px solid var(--border); background: var(--card-bg);
+      cursor: pointer; color: var(--ink); transition: all 0.15s;
+    }
+
+    .nav-btn:hover { background: var(--ink); color: var(--cream); border-color: var(--ink); }
+    .nav-btn:active { transform: scale(0.97); }
+
+    /* ── Footer ── */
+    footer {
+      border-top: 1px solid var(--border); padding: 10px 0;
+      display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    }
+
+    #status-bar { font-size: 0.74rem; color: var(--muted); font-style: italic; transition: color 0.3s; }
+    .footer-right { font-size: 0.63rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--warm-lt); }
+
+    /* ── Animations ── */
+    @keyframes fadeSlideUp {
+      from { opacity: 0; transform: translateY(10px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .step-animate { animation: fadeSlideUp 0.28s ease forwards; }
+
+    .gesture-hint {
+      position: fixed; top: 50%; transform: translateY(-50%);
+      background: var(--ink); color: var(--cream); font-size: 2rem;
+      padding: 18px 28px; border-radius: 14px; opacity: 0;
+      pointer-events: none; transition: opacity 0.2s; z-index: 100;
+    }
+
+    #hint-next { right: 32px; }
+    #hint-prev { left: 32px; }
+    .gesture-hint.show { opacity: 0.88; }
+  </style>
+</head>
+<body>
+
+<div class="layout">
+
+  <!-- Header -->
+  <header>
+    <div class="brand">
+      <span class="brand-title">Cuisine Helper</span>
+      <span class="brand-sub">MultiFlow Demo</span>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:10px">
+      <div id="filter-badge">
+        <span id="filter-badge-text">Filtered</span>
+        <span class="badge-clear" id="btn-clear-filter">✕</span>
+      </div>
+    </div>
+
+    <div class="hub">
+      <video id="webcam-video" autoplay playsinline></video>
+      <div class="color-pill">
+        <div id="color-dot"></div>
+        <span id="color-label">—</span>
+      </div>
+      <div class="hub-divider"></div>
+      <div class="indicators">
+        <div class="ind"><div class="ind-dot" id="dot-voice"></div>Voice</div>
+        <div class="ind"><div class="ind-dot" id="dot-gesture"></div>Gesture</div>
+        <div class="ind"><div class="ind-dot" id="dot-color"></div>Color</div>
+      </div>
+      <div class="hub-divider"></div>
+      <button class="btn btn-primary" id="btn-start">▶ Start</button>
+      <button class="btn btn-ghost" id="btn-stop" style="display:none">■ Stop</button>
+    </div>
+  </header>
+
+  <!-- Main -->
+  <div class="main">
+
+    <aside class="sidebar">
+      <span class="sidebar-label">Cuisine</span>
+
+      <div class="cuisine-filters">
+        <button class="cuisine-chip active" data-cuisine="all">
+          <span class="chip-flag">🍽️</span><span class="chip-name">All cuisines</span>
+        </button>
+        <button class="cuisine-chip" data-cuisine="French">
+          <span class="chip-flag">🇫🇷</span><span class="chip-name">French</span><span class="chip-count">1</span>
+        </button>
+        <button class="cuisine-chip" data-cuisine="Italian">
+          <span class="chip-flag">🇮🇹</span><span class="chip-name">Italian</span><span class="chip-count">1</span>
+        </button>
+        <button class="cuisine-chip" data-cuisine="Japanese">
+          <span class="chip-flag">🇯🇵</span><span class="chip-name">Japanese</span><span class="chip-count">1</span>
+        </button>
+        <button class="cuisine-chip" data-cuisine="Mexican">
+          <span class="chip-flag">🇲🇽</span><span class="chip-name">Mexican</span><span class="chip-count">1</span>
+        </button>
+        <button class="cuisine-chip" data-cuisine="Greek">
+          <span class="chip-flag">🇬🇷</span><span class="chip-name">Greek</span><span class="chip-count">1</span>
+        </button>
+      </div>
+
+      <!-- Live fusion status — покажува pending modalities -->
+      <div class="combo-card">
+        <div class="combo-title">⚡ Fusion Status</div>
+        <div id="combo-status">Waiting for input…</div>
+      </div>
+
+      <!-- Commands -->
+      <div class="hint-card">
+        <div class="hint-title">Multi-modal commands</div>
+
+        <span class="hint-badge badge-duo">2 modalities required</span>
+        <div class="hint-row">
+          <span class="hint-icon">🎨🗣️</span>
+          <div>
+            <span class="hint-cmd">Hold color + say cuisine</span>
+            <span class="hint-desc">blue → "french", red → "italian"…</span>
+          </div>
+        </div>
+        <div class="hint-row">
+          <span class="hint-icon">🗣️👋</span>
+          <div>
+            <span class="hint-cmd">"next" + swipe right →</span>
+            <span class="hint-desc">both required to advance</span>
+          </div>
+        </div>
+        <div class="hint-row">
+          <span class="hint-icon">🗣️👋</span>
+          <div>
+            <span class="hint-cmd">"previous" + swipe left ←</span>
+            <span class="hint-desc">both required to go back</span>
+          </div>
+        </div>
+        <div class="hint-row">
+          <span class="hint-icon">🗣️👋</span>
+          <div>
+            <span class="hint-cmd">"stop" + swipe left ←</span>
+            <span class="hint-desc">clear filter, show all</span>
+          </div>
+        </div>
+
+        <span class="hint-badge badge-trio" style="margin-top:4px">3 modalities required</span>
+        <div class="hint-row">
+          <span class="hint-icon">🎨🗣️👋</span>
+          <div>
+            <span class="hint-cmd">Color + "open/cook" + point center</span>
+            <span class="hint-desc">open recipe by color</span>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Recipe -->
+    <div class="recipe-area">
+      <div class="recipe-meta">
+        <span id="recipe-cuisine" class="recipe-cuisine-tag">🇫🇷 French</span>
+        <span id="step-counter" class="recipe-counter">Step 1 of 5 · Recipe 1 of 5</span>
+      </div>
+
+      <div id="recipe-card">
+        <div class="recipe-title-wrap">
+          <h1 id="recipe-title">Coq au Vin</h1>
+          <div id="step-badge" class="step-badge">Step 01</div>
+        </div>
+        <div class="step-content">
+          <p id="recipe-step">Season chicken pieces with salt and pepper.</p>
+        </div>
+        <div id="step-dots"></div>
+      </div>
+
+      <div class="nav-row">
+        <button class="nav-btn" id="btn-prev"><span>←</span> Previous</button>
+        <span id="status"></span>
+        <button class="nav-btn" id="btn-next">Next <span>→</span></button>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <span id="status-bar">Click Start to enable multi-modal input</span>
+    <span class="footer-right">MultiFlow Toolkit · Group 2</span>
+  </footer>
+</div>
+
+<div class="gesture-hint" id="hint-next">→</div>
+<div class="gesture-hint" id="hint-prev">←</div>
+
+<script>
+  window.indicatePulse = function(source) {
+    const dot = document.getElementById('dot-' + source);
+    if (!dot) return;
+    dot.classList.add('pulse');
+    clearTimeout(dot._t);
+    dot._t = setTimeout(() => dot.classList.remove('pulse'), 400);
+  };
+
+  window.showGestureHint = function(dir) {
+    const el = document.getElementById(dir === 'next' ? 'hint-next' : 'hint-prev');
+    if (!el) return;
+    el.classList.add('show');
+    clearTimeout(el._t);
+    el._t = setTimeout(() => el.classList.remove('show'), 700);
+  };
+</script>
+
+<script type="module" src="main.js"></script>
+</body>
+</html>
