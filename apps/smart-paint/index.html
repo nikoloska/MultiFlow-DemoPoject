@@ -3,350 +3,444 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Smart Paint — MultiFlow Demo</title>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
+  <title>Smart Paint — MultiFlow</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
 
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      background: #0d1b2a;
-      color: #e2e8f0;
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0a0e1a;
+      --surface:   #111827;
+      --surface2:  #1a2234;
+      --border:    rgba(255,255,255,0.07);
+      --teal:      #0d9488;
+      --teal-lt:   #14b8a6;
+      --text:      #e2e8f0;
+      --muted:     #64748b;
+      --danger:    #e11d48;
+      --r:         10px;
+    }
+
+    html, body {
+      height: 100%; background: var(--bg); color: var(--text);
+      font-family: 'Inter', sans-serif; font-size: 13px; overflow: hidden;
+    }
+
+    /* ── Layout ── */
+    .app {
       height: 100vh;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
+      display: grid;
+      grid-template-rows: 52px auto auto 1fr;
     }
 
     /* ── Header ── */
     header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 8px 20px;
-      background: #1b3a5c;
-      border-bottom: 1px solid #0d9488;
-      flex-shrink: 0;
-      gap: 12px;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 20px; background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      gap: 16px;
     }
 
-    header h1 {
-      font-size: 1.2rem;
-      font-weight: 700;
-      color: #5eead4;
-      letter-spacing: 0.04em;
+    .brand {
+      display: flex; align-items: center; gap: 10px;
     }
 
-    header .subtitle {
-      font-size: 0.75rem;
-      color: #94a3b8;
+    .brand-icon {
+      width: 28px; height: 28px; border-radius: 7px;
+      background: linear-gradient(135deg, var(--teal), #7c3aed);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px;
     }
 
-    /* ── Camera + color detection hub (top-right of header) ── */
+    .brand-name {
+      font-size: 0.88rem; font-weight: 600; letter-spacing: -0.01em;
+    }
+
+    .brand-sub {
+      font-size: 0.68rem; color: var(--muted);
+      font-weight: 400;
+    }
+
+    /* ── Detection hub ── */
     .detection-hub {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      background: rgba(0,0,0,0.25);
-      border-radius: 10px;
-      padding: 6px 12px;
-      border: 1px solid #1b3a5c;
+      display: flex; align-items: center; gap: 10px;
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 50px; padding: 4px 14px 4px 4px;
     }
 
     #webcam-video {
-      width: 90px;
-      height: 65px;
-      border-radius: 8px;
-      transform: scaleX(-1);
-      border: 2px solid #0d9488;
-      object-fit: cover;
-      display: none; /* shown once camera starts */
+      width: 72px; height: 50px; border-radius: 40px;
+      transform: scaleX(-1); object-fit: cover; display: none;
+      border: 1.5px solid var(--teal);
     }
 
-    #color-dot {
-      width: 32px;
-      height: 32px;
-      border-radius: 50%;
-      background: #1b3a5c;
-      border: 2px solid #475569;
-      transition: background 0.3s;
-      flex-shrink: 0;
+    /* Color lock widget */
+    .color-lock {
+      display: flex; align-items: center; gap: 8px; padding: 0 4px;
     }
 
-    #color-label {
-      font-size: 0.72rem;
-      font-weight: 700;
-      color: #94a3b8;
-      text-transform: uppercase;
-      min-width: 40px;
+    .color-lock-ring {
+      position: relative; width: 36px; height: 36px; flex-shrink: 0;
     }
 
+    .color-lock-ring svg {
+      width: 36px; height: 36px; transform: rotate(-90deg);
+    }
+
+    .color-lock-ring svg circle {
+      fill: none; stroke-width: 2.5;
+    }
+
+    #lock-bg    { stroke: rgba(255,255,255,0.08); }
+    #lock-progress {
+      stroke: var(--teal);
+      stroke-dasharray: 87.96; /* 2π×14 */
+      stroke-dashoffset: 87.96;
+      stroke-linecap: round;
+      transition: stroke-dashoffset 0.15s linear, stroke 0.3s;
+    }
+
+    .color-dot-inner {
+      position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      width: 18px; height: 18px; border-radius: 50%;
+      background: var(--surface2);
+      border: 1.5px solid rgba(255,255,255,0.15);
+      transition: background 0.2s;
+    }
+
+    #color-dot-live   { /* reuses .color-dot-inner */ }
+
+    .color-info { display: flex; flex-direction: column; gap: 2px; }
+
+    .color-row {
+      display: flex; align-items: center; gap: 5px; font-size: 0.65rem;
+    }
+
+    .color-row-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--surface2); border: 1px solid rgba(255,255,255,0.15);
+      flex-shrink: 0; transition: background 0.2s, box-shadow 0.2s;
+    }
+
+    .color-row-label { color: var(--muted); }
+    .color-row-value { font-weight: 500; min-width: 40px; color: var(--text); }
+
+    .hub-sep { width: 1px; height: 20px; background: var(--border); }
+
+    /* Modality indicators */
+    .mod-indicators { display: flex; gap: 6px; }
+
+    .mod-ind {
+      display: flex; align-items: center; gap: 4px;
+      font-size: 0.62rem; font-weight: 500; color: var(--muted);
+      letter-spacing: 0.06em; text-transform: uppercase;
+    }
+
+    .mod-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--border); transition: background 0.15s, box-shadow 0.15s;
+    }
+
+    .mod-dot.active {
+      background: var(--teal-lt); box-shadow: 0 0 6px var(--teal-lt);
+    }
+
+    /* Mode badge */
     #mode-display {
-      font-size: 0.72rem;
-      font-weight: 900;
-      padding: 4px 12px;
-      border-radius: 20px;
-      background: #334155;
-      color: #94a3b8;
-      text-transform: uppercase;
-      transition: background 0.3s, color 0.3s;
-      white-space: nowrap;
+      font-size: 0.65rem; font-weight: 600; padding: 4px 11px;
+      border-radius: 20px; background: var(--surface2);
+      color: var(--muted); text-transform: uppercase;
+      letter-spacing: 0.08em; white-space: nowrap;
+      transition: all 0.25s;
     }
+
     #mode-display.painting {
-      background: #14532d;
-      color: #4ade80;
-      box-shadow: 0 0 8px rgba(74, 222, 128, 0.4);
+      background: rgba(20, 184, 166, 0.15);
+      color: var(--teal-lt);
+      box-shadow: 0 0 12px rgba(20, 184, 166, 0.2);
     }
+
+    /* Buttons */
+    .btn {
+      font-family: 'Inter', sans-serif; font-size: 0.75rem; font-weight: 500;
+      padding: 6px 14px; border-radius: 7px; border: none; cursor: pointer;
+      transition: opacity 0.15s, transform 0.1s;
+    }
+
+    .btn:active { transform: scale(0.96); }
+    .btn:disabled { opacity: 0.35; cursor: not-allowed; }
+    .btn-teal   { background: var(--teal); color: #fff; }
+    .btn-teal:hover { background: var(--teal-lt); }
+    .btn-danger { background: var(--danger); color: #fff; }
+    .btn-ghost  { background: var(--surface2); color: var(--muted); border: 1px solid var(--border); }
+    .btn-ghost:hover { color: var(--text); border-color: rgba(255,255,255,0.15); }
 
     /* ── Toolbar ── */
     .toolbar {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 7px 20px;
-      background: #0d1b2a;
-      border-bottom: 1px solid #1b3a5c;
-      flex-shrink: 0;
-      flex-wrap: wrap;
+      display: flex; align-items: center; gap: 8px;
+      padding: 7px 20px; background: var(--surface);
+      border-bottom: 1px solid var(--border); flex-wrap: wrap;
     }
 
-    button {
-      padding: 7px 14px;
-      border: none;
-      border-radius: 6px;
-      font-size: 0.82rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: opacity 0.15s, background 0.15s;
-    }
-    button:disabled { opacity: 0.4; cursor: not-allowed; }
+    .toolbar-sep { width: 1px; height: 22px; background: var(--border); }
 
-    #btn-start { background: #0d9488; color: #fff; }
-    #btn-stop  { background: #e11d48; color: #fff; display: none; }
-    #btn-stop.visible { display: inline-block; }
-    #btn-clear { background: #475569; color: #fff; }
-
-    /* ── Brush type buttons ── */
     .brush-btn {
-      background: #1b3a5c;
-      color: #94a3b8;
-      border: 1px solid #334155;
+      font-family: 'Inter', sans-serif; font-size: 0.75rem; font-weight: 500;
+      padding: 5px 12px; border-radius: 7px; border: 1px solid var(--border);
+      background: transparent; color: var(--muted); cursor: pointer;
+      transition: all 0.15s;
     }
+
+    .brush-btn:hover { color: var(--text); border-color: rgba(255,255,255,0.15); }
+
     .brush-btn.active {
-      background: #0d9488;
-      color: #fff;
-      border-color: #0d9488;
+      background: rgba(13, 148, 136, 0.15);
+      color: var(--teal-lt);
+      border-color: var(--teal);
     }
 
-    .separator { width: 1px; height: 24px; background: #1b3a5c; flex-shrink: 0; }
-
-    label.control {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 0.8rem;
-      color: #94a3b8;
+    .ctrl-label {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 0.72rem; color: var(--muted);
     }
 
     input[type="color"] {
-      width: 32px; height: 28px;
-      border: none; border-radius: 4px;
-      cursor: pointer; background: none; padding: 0;
+      width: 28px; height: 24px; border: 1px solid var(--border);
+      border-radius: 5px; cursor: pointer; background: none; padding: 0;
     }
 
-    input[type="range"] { width: 80px; }
+    input[type="range"] {
+      width: 72px; accent-color: var(--teal);
+    }
 
     /* ── Status bar ── */
     .status-bar {
-      display: flex;
-      align-items: center;
-      gap: 16px;
-      padding: 4px 20px;
-      background: #0a1628;
-      font-size: 0.78rem;
-      flex-shrink: 0;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 3px 20px; background: var(--bg);
+      border-bottom: 1px solid var(--border);
     }
 
-    #status    { color: #64748b; font-style: italic; }
-    #debug     { color: #334155; font-size: 0.72rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 500px; }
+    #status { font-size: 0.7rem; color: var(--muted); font-style: italic; }
+    #debug  { font-size: 0.65rem; color: #1e3a4a; white-space: nowrap;
+              overflow: hidden; text-overflow: ellipsis; max-width: 460px; }
 
-    /* ── Canvas area ── */
+    /* ── Canvas ── */
     .canvas-wrap {
-      flex: 1;
-      position: relative;
-      overflow: hidden;
+      flex: 1; position: relative; overflow: hidden;
     }
 
     #canvas {
-      width: 100%;
-      height: 100%;
-      display: block;
-      cursor: crosshair;
-      background: #ffffff;
+      width: 100%; height: 100%; display: block;
+      cursor: crosshair; background: #ffffff;
     }
 
-    /* ── Commands legend ── */
+    /* ── Legend ── */
     .legend {
-      position: absolute;
-      bottom: 16px;
-      left: 16px;
-      background: rgba(13, 27, 42, 0.85);
-      border: 1px solid #1b3a5c;
-      border-radius: 8px;
-      padding: 10px 14px;
-      font-size: 0.75rem;
-      line-height: 1.9;
-      backdrop-filter: blur(4px);
+      position: absolute; bottom: 16px; left: 16px;
+      background: rgba(10, 14, 26, 0.88);
+      border: 1px solid var(--border);
+      border-radius: var(--r); padding: 10px 14px;
+      font-size: 0.7rem; line-height: 2;
+      backdrop-filter: blur(8px);
     }
 
-    .legend .title {
-      font-weight: 700;
-      color: #14b8a6;
-      margin-bottom: 4px;
+    .legend-title { font-weight: 600; color: var(--teal-lt); margin-bottom: 2px; }
+    .legend .cmd  { color: var(--teal-lt); font-weight: 600; }
+    .legend .desc { color: var(--muted); }
+
+    /* Color lock hint */
+    .lock-hint {
+      position: absolute; bottom: 16px; right: 16px;
+      background: rgba(10, 14, 26, 0.88); border: 1px solid var(--border);
+      border-radius: var(--r); padding: 10px 14px; font-size: 0.7rem;
+      backdrop-filter: blur(8px); line-height: 1.8;
     }
 
-    .legend .cmd { color: #5eead4; font-weight: 600; }
-    .legend .desc { color: #94a3b8; }
+    .lock-hint-title { font-weight: 600; color: var(--teal-lt); margin-bottom: 4px; }
+    .lock-hint p { color: var(--muted); }
+    .lock-hint strong { color: var(--text); font-weight: 500; }
 
-    /* ── Active indicator dots ── */
-    .indicators {
-      position: absolute;
-      top: 12px;
-      right: 12px;
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
+    /* Canvas indicators */
+    .canvas-indicators {
+      position: absolute; top: 12px; right: 12px;
+      display: flex; flex-direction: column; gap: 5px;
     }
 
-    .indicator {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 0.72rem;
-      color: #64748b;
+    .c-ind {
+      display: flex; align-items: center; gap: 5px;
+      font-size: 0.65rem; color: var(--muted);
     }
 
-    .dot {
-      width: 8px; height: 8px;
-      border-radius: 50%;
-      background: #334155;
-      transition: background 0.3s;
+    .c-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--surface2); border: 1px solid var(--border);
+      transition: all 0.2s;
     }
-    .dot.active { background: #0d9488; box-shadow: 0 0 6px #0d9488; }
+
+    .c-dot.active { background: var(--teal); box-shadow: 0 0 5px var(--teal); }
   </style>
 </head>
 <body>
 
+<div class="app">
+
+  <!-- Header -->
   <header>
-    <div>
-      <h1>MultiFlow — Smart Paint</h1>
-      <div class="subtitle">Voice · Gesture · Color · Fused in Real Time</div>
+    <div class="brand">
+      <div class="brand-icon">🎨</div>
+      <div>
+        <div class="brand-name">Smart Paint</div>
+        <div class="brand-sub">MultiFlow · Voice · Gesture · Color</div>
+      </div>
     </div>
 
-    <!-- Detection hub: live camera feed + color indicator + mode -->
     <div class="detection-hub">
       <video id="webcam-video" autoplay playsinline></video>
-      <div id="color-dot"></div>
-      <span id="color-label">—</span>
+
+      <!-- Color lock widget -->
+      <div class="color-lock">
+        <div class="color-lock-ring">
+          <svg viewBox="0 0 36 36">
+            <circle id="lock-bg"       cx="18" cy="18" r="14"/>
+            <circle id="lock-progress" cx="18" cy="18" r="14"/>
+          </svg>
+          <div class="color-dot-inner" id="color-dot-live"></div>
+        </div>
+
+        <div class="color-info">
+          <div class="color-row">
+            <div class="color-row-dot" id="color-dot-locked"></div>
+            <span class="color-row-label">locked</span>
+            <span class="color-row-value" id="color-label-locked">—</span>
+          </div>
+          <div class="color-row">
+            <span class="color-row-label" style="margin-left:13px">live</span>
+            <span class="color-row-value" id="color-label-live">—</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="hub-sep"></div>
+
+      <div class="mod-indicators">
+        <div class="mod-ind"><div class="mod-dot" id="dot-voice"></div>Voice</div>
+        <div class="mod-ind"><div class="mod-dot" id="dot-gesture"></div>Gesture</div>
+        <div class="mod-ind"><div class="mod-dot" id="dot-color"></div>Color</div>
+      </div>
+
+      <div class="hub-sep"></div>
+
       <div id="mode-display">IDLE</div>
+
+      <div class="hub-sep"></div>
+
+      <button class="btn btn-teal"   id="btn-start">▶ Start</button>
+      <button class="btn btn-danger" id="btn-stop" style="display:none">■ Stop</button>
     </div>
 
-    <div style="font-size:0.7rem;color:#475569">Group 2 — Modular Architecture Demo</div>
+    <div style="font-size:0.65rem;color:#1e3a4a">Group 2</div>
   </header>
 
+  <!-- Toolbar -->
   <div class="toolbar">
-    <button id="btn-start">▶ Start</button>
-    <button id="btn-stop">■ Stop</button>
-    <button id="btn-clear">✕ Clear</button>
+    <button class="btn btn-ghost" id="btn-clear">✕ Clear</button>
 
-    <div class="separator"></div>
+    <div class="toolbar-sep"></div>
 
-    <!-- Brush type selection -->
     <button class="brush-btn active" id="brush-magic">✨ Magic</button>
-    <button class="brush-btn" id="brush-pencil">✏️ Pencil</button>
-    <button class="brush-btn" id="brush-eraser">🧽 Eraser</button>
+    <button class="brush-btn"        id="brush-pencil">✏️ Pencil</button>
+    <button class="brush-btn"        id="brush-eraser">🧽 Eraser</button>
 
-    <div class="separator"></div>
+    <div class="toolbar-sep"></div>
 
-    <label class="control">
-      Brush color
-      <input type="color" id="brush-color" value="#000000" />
+    <label class="ctrl-label">
+      Color <input type="color" id="brush-color" value="#000000" />
     </label>
 
-    <label class="control">
+    <label class="ctrl-label">
       Size
       <input type="range" id="brush-size" min="1" max="30" value="4" />
-      <span id="brush-size-label">4</span>
+      <span id="brush-size-label" style="min-width:16px">4</span>
     </label>
   </div>
 
+  <!-- Status bar -->
   <div class="status-bar">
     <span id="status">Click "Start" to begin</span>
     <span id="debug"></span>
   </div>
 
+  <!-- Canvas -->
   <div class="canvas-wrap">
     <canvas id="canvas"></canvas>
 
     <div class="legend">
-      <div class="title">Voice Commands</div>
-      <div><span class="cmd">"paint"</span> <span class="desc">→ start drawing (uses detected color)</span></div>
-      <div><span class="cmd">"stop"</span> <span class="desc">→ stop drawing</span></div>
-      <div><span class="cmd">"color"</span> <span class="desc">→ change pen to detected color</span></div>
-      <div><span class="cmd">"background"</span> <span class="desc">+ color → set bg</span></div>
+      <div class="legend-title">Voice Commands</div>
+      <div><span class="cmd">"paint"</span> <span class="desc">→ draw with locked color</span></div>
+      <div><span class="cmd">"stop"</span>  <span class="desc">→ stop drawing</span></div>
+      <div><span class="cmd">"color"</span> <span class="desc">→ change brush to locked color</span></div>
+      <div><span class="cmd">"background"</span> <span class="desc">→ set bg to locked color</span></div>
       <div><span class="cmd">"clear"</span> <span class="desc">→ wipe canvas</span></div>
-      <div style="margin-top:6px;color:#475569;font-size:0.7rem;">Draw a circle → golden sun ☀️</div>
+      <div style="margin-top:4px;color:#1e3a4a;font-size:0.65rem;">Draw a circle → golden sun ☀️</div>
     </div>
 
-    <div class="indicators">
-      <div class="indicator">
-        <div class="dot" id="dot-voice"></div> Voice
-      </div>
-      <div class="indicator">
-        <div class="dot" id="dot-gesture"></div> Gesture
-      </div>
-      <div class="indicator">
-        <div class="dot" id="dot-color"></div> Color
-      </div>
+    <div class="lock-hint">
+      <div class="lock-hint-title">🔒 Color Lock</div>
+      <p>Hold a <strong>colored object</strong> steady</p>
+      <p>for <strong>1.5s</strong> to lock the color.</p>
+      <p>Ring fills as color stabilizes.</p>
+    </div>
+
+    <div class="canvas-indicators">
+      <div class="c-ind"><div class="c-dot" id="dot-voice-c"></div>Voice</div>
+      <div class="c-ind"><div class="c-dot" id="dot-gesture-c"></div>Gesture</div>
+      <div class="c-ind"><div class="c-dot" id="dot-color-c"></div>Color</div>
     </div>
   </div>
 
-  <!-- Load app as ES module -->
-  <script type="module" src="main.js"></script>
+</div>
 
-  <!-- Simple UI helpers (non-module) -->
-  <script>
-    // Brush size label
-    document.getElementById("brush-size").addEventListener("input", function () {
-      document.getElementById("brush-size-label").textContent = this.value;
-    });
+<script>
+  // Brush size label
+  document.getElementById("brush-size").addEventListener("input", function () {
+    document.getElementById("brush-size-label").textContent = this.value;
+  });
 
-    // Toggle start/stop button visibility
-    document.getElementById("btn-start").addEventListener("click", function () {
-      this.style.display = "none";
-      document.getElementById("btn-stop").style.display = "inline-block";
-    });
-    document.getElementById("btn-stop").addEventListener("click", function () {
-      this.style.display = "none";
-      document.getElementById("btn-start").style.display = "inline-block";
-    });
+  // Start/stop button swap
+  document.getElementById("btn-start").addEventListener("click", function () {
+    this.style.display = "none";
+    document.getElementById("btn-stop").style.display = "inline-block";
+  });
+  document.getElementById("btn-stop").addEventListener("click", function () {
+    this.style.display = "none";
+    document.getElementById("btn-start").style.display = "inline-block";
+  });
 
-    // Brush type button toggle
-    document.querySelectorAll(".brush-btn").forEach((btn) => {
-      btn.addEventListener("click", function () {
-        document.querySelectorAll(".brush-btn").forEach((b) => b.classList.remove("active"));
-        this.classList.add("active");
-      });
+  // Brush type toggle
+  document.querySelectorAll(".brush-btn").forEach((btn) => {
+    btn.addEventListener("click", function () {
+      document.querySelectorAll(".brush-btn").forEach((b) => b.classList.remove("active"));
+      this.classList.add("active");
     });
+  });
 
-    // Pulse indicator dots — called from main.js via window.indicatePulse(source)
-    window.indicatePulse = function (source) {
-      const dot = document.getElementById("dot-" + source);
+  // Pulse both header dots and canvas dots
+  window.indicatePulse = function (source) {
+    [
+      document.getElementById("dot-" + source),
+      document.getElementById("dot-" + source + "-c"),
+    ].forEach(dot => {
       if (!dot) return;
       dot.classList.add("active");
       clearTimeout(dot._t);
       dot._t = setTimeout(() => dot.classList.remove("active"), 400);
-    };
-  </script>
+    });
+  };
+</script>
 
+<script type="module" src="main.js"></script>
 </body>
 </html>

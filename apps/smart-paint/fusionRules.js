@@ -1,55 +1,111 @@
 /**
- * smartPaintFusionRule — the fusion logic for the Smart Paint app.
+ * smartPaintFusionRule — fusion logic for Smart Paint.
  *
- * This lives in the APP, not the toolkit.
- * It defines what combinations of modality events mean for THIS application.
+ * Every action that involves color requires BOTH color + voice.
+ * Color is "locked in" only after being stable for COLOR_STABLE_MS.
+ * This prevents brush/background changing due to background noise.
  *
- * NOTE: Continuous drawing is NOT handled here — it is managed by a direct
- * gesture listener in main.js that checks `isPainting` app state. This avoids
- * the fusion window expiring mid-stroke and stopping drawing after 3 seconds.
+ * ┌─────────────────┬──────────────────────────────────────────────┐
+ * │  INTENT         │  REQUIRED MODALITIES                         │
+ * ├─────────────────┼──────────────────────────────────────────────┤
+ * │  activateDraw   │  🎨 locked color  +  🗣️ "paint"              │
+ * │  setBackground  │  🎨 locked color  +  🗣️ "background"         │
+ * │  changeColor    │  🎨 locked color  +  🗣️ "color"              │
+ * │  stopDraw       │  🗣️ "stop"  (dismiss — single modality ok)   │
+ * │  clear          │  🗣️ "clear" (dismiss — single modality ok)   │
+ * └─────────────────┴──────────────────────────────────────────────┘
  *
- * @param {Array} buffer - array of recent events from the FusionEngine
- * @returns {{ intent: string, ...args } | null}
+ * Color lock:
+ *   The same color name must be detected for COLOR_STABLE_MS (1500ms)
+ *   without changing before it is considered "locked".
+ *   Only the locked color is used for intent fusion — not the live feed.
  */
+ 
+const COLOR_STABLE_MS = 1500;
+ 
+// Color stability state
+let _lastColorName    = null;
+let _colorStableSince = 0;
+let _lockedColor      = null; // { name, rgb } — intentionally held color
+ 
 export function smartPaintFusionRule(buffer) {
-  // Helper: get most recent event of a given type from a given source
   const last = (source, type) =>
     [...buffer].reverse().find((e) => e.source === source && e.type === type);
-
-  const voiceCmd = last("voice", "command");
-  const color    = last("color", "color");
-
-  if (!voiceCmd) return null;
-
-  const cmd = voiceCmd.payload.command;
-
+ 
+  const voiceEvt = last("voice", "command");
+  const colorEvt = last("color", "color");
+ 
+  // ── Color stability tracking ───────────────────────────────────────────────
+  // Runs every call so the lock builds up over time, independent of voice
+  if (colorEvt) {
+    const name = colorEvt.payload.name;
+    const now  = Date.now();
+ 
+    if (name !== _lastColorName) {
+      // Color changed — reset stability timer
+      _lastColorName    = name;
+      _colorStableSince = now;
+    } else if (now - _colorStableSince >= COLOR_STABLE_MS) {
+      // Held steady long enough — lock it in
+      _lockedColor = colorEvt.payload;
+    }
+  }
+ 
+  // No voice — nothing to fuse
+  if (!voiceEvt) return null;
+ 
+  const cmd = voiceEvt.payload.command;
+ 
   switch (cmd) {
+ 
+    // Requires: locked color + voice "paint"
     case "paint":
-      // Activate drawing mode; pass detected color for late fusion (applied in main.js).
-      // Continuous drawing is handled by the direct gesture listener in main.js.
-      return { intent: "activateDraw", color: color ? color.payload : null };
-
-    case "color":
-      // Change brush color to whatever is currently in front of the camera
-      if (color) {
-        return { intent: "changeColor", color: color.payload };
-      }
-      return null;
-
+      if (!_lockedColor) return null; // no color locked yet — ignore
+      return {
+        intent:  "activateDraw",
+        color:   _lockedColor,
+        trigger: "color + voice",
+      };
+ 
+    // Requires: locked color + voice "background"
     case "background":
-      // "background" + detected color → set canvas background
-      if (color) {
-        return { intent: "setBackground", color: color.payload.name, rgb: color.payload.rgb };
-      }
-      return null;
-
+      if (!_lockedColor) return null;
+      return {
+        intent:  "setBackground",
+        color:   _lockedColor.name,
+        rgb:     _lockedColor.rgb,
+        trigger: "color + voice",
+      };
+ 
+    // Requires: locked color + voice "color"
+    case "color":
+      if (!_lockedColor) return null;
+      return {
+        intent:  "changeColor",
+        color:   _lockedColor,
+        trigger: "color + voice",
+      };
+ 
+    // Single modality — dismiss actions don't need color
     case "stop":
-      return { intent: "stopDraw" };
-
+      return { intent: "stopDraw", trigger: "voice" };
+ 
     case "clear":
-      return { intent: "clear" };
-
+      return { intent: "clear", trigger: "voice" };
+ 
     default:
       return null;
   }
 }
+ 
+/** Returns the currently locked color — used by main.js for UI feedback. */
+export function getLockedColor() {
+  return _lockedColor;
+}
+ 
+/** Returns lock progress 0–1 — used by main.js to animate the ring. */
+export function getColorProgress() {
+  if (!_lastColorName || !_colorStableSince) return 0;
+  return Math.min((Date.now() - _colorStableSince) / COLOR_STABLE_MS, 1);
+}
+ 

@@ -2,11 +2,11 @@
  * Cuisine Helper — main entry point.
  *
  * Fusion rules (all require AT LEAST 2 modalities):
- *   color + voice(cuisine)             → FILTER_CUISINE
- *   voice "next"  + gesture swipe →    → NEXT_STEP
- *   voice "prev"  + gesture swipe ←    → PREV_STEP
+ *   color + voice(cuisine)              → FILTER_CUISINE
  *   color + voice "open/cook" + gesture → OPEN_RECIPE
- *   voice "stop"  + gesture swipe ←    → STOP
+ *   voice "next"  + gesture swipe →     → NEXT_STEP
+ *   voice "prev"  + gesture swipe ←     → PREV_STEP
+ *   voice "stop"  + gesture swipe ←     → STOP
  */
  
 import {
@@ -16,7 +16,7 @@ import {
   ColorDetectionModule,
 } from "../../packages/multiflow-toolkit/src/index.js";
  
-import { cuisineFusionRule } from "./fusionRules.js";
+import { fusionConfig } from "./fusionRules.js";
  
 // ─── 1. Recipe Data ───────────────────────────────────────────────────────────
 const RECIPES = [
@@ -77,6 +77,12 @@ const RECIPES = [
   },
 ];
  
+// ─── Cuisine keyword → display name map ──────────────────────────────────────
+const CUISINE_MAP = {
+  french: "French", italian: "Italian", japanese: "Japanese",
+  mexican: "Mexican", greek: "Greek",
+};
+ 
 // ─── 2. App State ─────────────────────────────────────────────────────────────
 let activeRecipes = [...RECIPES];
 let currentIndex  = 0;
@@ -114,12 +120,13 @@ const color = new ColorDetectionModule({
   videoElement: webcamVideo,
 });
  
-// ─── 5. Fusion Engine ─────────────────────────────────────────────────────────
+// ─── 5. Fusion Engine — declarative config ────────────────────────────────────
+// setFusionConfig() instead of setFusionRule() — no fusion logic in the app
 const engine = new FusionEngine({ windowMs: 4000 })
   .register(voice)
   .register(gesture)
   .register(color)
-  .setFusionRule(cuisineFusionRule);
+  .setFusionConfig(fusionConfig);
  
 // ─── 6. Raw Events — update pending state for UI feedback ────────────────────
 engine.onRawEvent((event) => {
@@ -144,19 +151,36 @@ engine.onRawEvent((event) => {
 });
  
 // ─── 7. Intent Handling ───────────────────────────────────────────────────────
-engine.onIntent(({ intent, trigger, ...args }) => {
+// FusionEngine (setFusionConfig) emits: { intent, trigger, voicePayload, colorPayload, gesturePayload }
+engine.onIntent(({ intent, trigger, voicePayload, colorPayload }) => {
   _setStatus(`✓ ${intent}  ·  triggered by: ${trigger}`, "#3B7A6B");
  
   switch (intent) {
  
     case "FILTER_CUISINE": {
-      const filtered = RECIPES.filter(r => r.cuisine === args.cuisine);
+      // Derive cuisine display name from the voice command
+      const cuisine  = CUISINE_MAP[voicePayload?.command];
+      const filtered = cuisine ? RECIPES.filter(r => r.cuisine === cuisine) : [];
       if (filtered.length) {
         activeRecipes = filtered;
         currentIndex  = 0;
         currentStep   = 0;
         _updateUI();
-        _showFilterBadge(args.cuisine, args.color);
+        _showFilterBadge(cuisine, colorPayload);
+        _flashCard("green");
+      }
+      break;
+    }
+ 
+    case "OPEN_RECIPE": {
+      // Match recipe by the detected color name
+      const matched = RECIPES.find(r => r.color === colorPayload?.name);
+      if (matched) {
+        activeRecipes = [matched];
+        currentIndex  = 0;
+        currentStep   = 0;
+        _updateUI();
+        _showFilterBadge(matched.cuisine, colorPayload);
         _flashCard("green");
       }
       break;
@@ -189,22 +213,7 @@ engine.onIntent(({ intent, trigger, ...args }) => {
       break;
     }
  
-    case "OPEN_RECIPE": {
-      // Match recipe by the detected color name
-      const matched = RECIPES.find(r => r.color === args.color?.name);
-      if (matched) {
-        activeRecipes = [matched];
-        currentIndex  = 0;
-        currentStep   = 0;
-        _updateUI();
-        _showFilterBadge(matched.cuisine, args.color);
-        _flashCard("green");
-      }
-      break;
-    }
- 
     case "STOP": {
-      // Reset to all recipes
       activeRecipes = [...RECIPES];
       currentIndex  = 0;
       currentStep   = 0;
@@ -228,7 +237,7 @@ document.getElementById("btn-start")?.addEventListener("click", async () => {
   _setStatus("Starting camera & speech…");
   await engine.startAll();
   webcamVideo.style.display = "block";
-  btn.style.display = "none";
+  btn.style.display  = "none";
   document.getElementById("btn-stop").style.display = "inline-block";
   _setStatus("Ready — use 2+ modalities together to trigger actions");
 });
