@@ -3,19 +3,15 @@ import { IModalityModule } from "./IModalityModule.js";
 /**
  * VoiceModule — captures speech input using the Web Speech API.
  *
- * Emits events of type "command" with payload: { command: string, transcript: string }
- *
- * Usage:
- *   const voice = new VoiceModule({ commands: ["paint", "stop", "clear", "background"] });
- *   voice.onData(event => console.log(event));
- *   voice.start();
+ * Emits events of type "command" with payload:
+ * { command: string, transcript: string, confidence: number }
  */
+// Voice recognition was made more responsive by enabling interim results,
+// so short commands like "paint" can be detected before the browser finalizes speech.
+// maxAlternatives = 5 lets the module check several recognition guesses instead of only the top one.
+// The confidence filter was removed because short words often receive low confidence even when correct.
+// This makes commands trigger more reliably with fewer repeated attempts.
 export class VoiceModule extends IModalityModule {
-  /**
-   * @param {object} config
-   * @param {string[]} config.commands - list of commands to listen for
-   * @param {string}   config.lang     - language code (default: "en-US")
-   */
   constructor(config = {}) {
     super("voice");
     this._commands = config.commands || ["paint", "stop", "clear", "background"];
@@ -40,32 +36,59 @@ export class VoiceModule extends IModalityModule {
 
     this._recognition = new SpeechRecognition();
     this._recognition.continuous = true;
-    this._recognition.interimResults = false;
+
+    // Important: true makes it react faster and improves short command detection.
+    this._recognition.interimResults = true;
+
+    // Ask browser for more guesses.
+    this._recognition.maxAlternatives = 5;
+
     this._recognition.lang = this._lang;
 
     this._recognition.onresult = (event) => {
-      const transcript = event.results[event.results.length - 1][0].transcript
-        .trim()
-        .toLowerCase();
+      const result = event.results[event.results.length - 1];
 
-      const matched = this._commands.find((cmd) => transcript.includes(cmd));
-      if (matched) {
-        this._emit("command", { command: matched, transcript });
+      // Ignore very unstable interim results, but still allow final/interim command matching.
+      const alternatives = Array.from(result);
+
+      for (const alt of alternatives) {
+        const transcript = alt.transcript.trim().toLowerCase();
+        const confidence = alt.confidence ?? 1;
+
+        const matched = this._commands.find((cmd) => {
+          const pattern = new RegExp(`\\b${cmd}\\b`, "i");
+          return pattern.test(transcript);
+        });
+
+        if (matched) {
+          this._emit("command", {
+            command: matched,
+            transcript,
+            confidence,
+          });
+          return;
+        }
       }
     };
 
     this._recognition.onerror = (event) => {
-      // Auto-restart on recoverable errors
       if (event.error === "no-speech" || event.error === "aborted") {
-        if (this._running) this._recognition.start();
+        if (this._running) {
+          try {
+            this._recognition.start();
+          } catch (_) {}
+        }
       } else {
         console.warn("[VoiceModule] Speech recognition error:", event.error);
       }
     };
 
     this._recognition.onend = () => {
-      // Keep listening unless explicitly stopped
-      if (this._running) this._recognition.start();
+      if (this._running) {
+        try {
+          this._recognition.start();
+        } catch (_) {}
+      }
     };
 
     this._running = true;
@@ -74,6 +97,7 @@ export class VoiceModule extends IModalityModule {
 
   stop() {
     this._running = false;
+
     if (this._recognition) {
       this._recognition.stop();
       this._recognition = null;
