@@ -25,6 +25,23 @@ export class CanvasRenderer {
 
   // ─── Public API ───────────────────────────────────────────────────────────
 
+  /** Begin a new stroke without changing global paint mode. */
+beginStroke() {
+  this._isDrawing = false;
+  this._lastX = null;
+  this._lastY = null;
+  this._strokeHistory = [];
+}
+
+/** End the current stroke without leaving painting mode. */
+endStroke() {
+  this._checkAndDrawSun(this._strokeHistory);
+  this._isDrawing = false;
+  this._lastX = null;
+  this._lastY = null;
+  this._strokeHistory = [];
+}
+
   /** Draw a point at normalized coordinates (0-1). */
   drawAt(normX, normY) {
     const x = normX * this._canvas.width;

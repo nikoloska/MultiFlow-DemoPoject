@@ -197,69 +197,151 @@ export class FusionEngine {
    * Evaluate declarative config rules against the current buffer.
    * Rules are tested in order — first match wins.
    */
-  _evalConfig(rules, buffer) {
-    const now = Date.now();
- 
-    const last = (source, type) =>
-      [...buffer].reverse().find(e => e.source === source && e.type === type);
- 
-    const voiceEvt   = last("voice",   "command");
-    const colorEvt   = last("color",   "color");
-    const gestureEvt = last("gesture", "position");
- 
-    for (const rule of rules) {
-      const cooldown      = rule.cooldown      ?? 800;
-      const colorMaxAge   = rule.colorMaxAge   ?? 4000;
-      const gestureMaxAge = rule.gestureMaxAge ?? 1500;
- 
-      // Check per-rule cooldown
-      const lastFired = this._cooldowns.get(rule.id) ?? 0;
-      if (now - lastFired < cooldown) continue;
- 
-      // Check all required modalities are present and fresh
-      let allPresent = true;
-      for (const source of (rule.requires ?? [])) {
-        if (source === "voice"   && !voiceEvt) { allPresent = false; break; }
-        if (source === "color"   && (!colorEvt   || now - colorEvt.timestamp   > colorMaxAge))   { allPresent = false; break; }
-        if (source === "gesture" && (!gestureEvt || now - gestureEvt.timestamp > gestureMaxAge)) { allPresent = false; break; }
+  /**
+ * Evaluate declarative config rules against the current buffer.
+ * Rules are tested in order — first match wins.
+ */
+_evalConfig(rules, buffer) {
+  const now = Date.now();
+
+  const last = (source, type) =>
+    [...buffer].reverse().find(e => e.source === source && e.type === type);
+
+  const voiceEvt      = last("voice",   "command");
+  const colorEvt      = last("color",   "color");
+  const gestureEvt    = last("gesture", "position");
+  const drawStartEvt  = last("gesture", "drawStart");
+  const drawEndEvt    = last("gesture", "drawEnd");
+
+  for (const rule of rules) {
+    const cooldown      = rule.cooldown      ?? 800;
+    const colorMaxAge   = rule.colorMaxAge   ?? 4000;
+    const gestureMaxAge = rule.gestureMaxAge ?? 1500;
+
+    // Check per-rule cooldown
+    const lastFired = this._cooldowns.get(rule.id) ?? 0;
+    if (now - lastFired < cooldown) continue;
+
+    // Check all required modalities are present and fresh
+    let allPresent = true;
+
+    for (const source of (rule.requires ?? [])) {
+      if (source === "voice" && !voiceEvt) {
+        allPresent = false;
+        break;
       }
-      if (!allPresent) continue;
- 
-      // Check match conditions
-      const match = rule.match ?? {};
- 
-      // Voice: command must be in the allowed list
-      if (match.voice) {
-        const cmd = voiceEvt?.payload?.command;
-        if (!cmd || !match.voice.includes(cmd)) continue;
+
+      if (
+        source === "color" &&
+        (!colorEvt || now - colorEvt.timestamp > colorMaxAge)
+      ) {
+        allPresent = false;
+        break;
       }
- 
-      // Gesture: hand position must match the required direction
-      if (match.gesture?.direction && gestureEvt) {
-        const x   = gestureEvt.payload.x ?? 0.5;
-        const dir = x > 0.78 ? "right" : x < 0.22 ? "left" : "center";
-        if (dir !== match.gesture.direction) continue;
+
+      if (source === "gesture") {
+        const hasFreshGesturePosition =
+          gestureEvt && now - gestureEvt.timestamp <= gestureMaxAge;
+
+        const hasFreshDrawStart =
+          drawStartEvt && now - drawStartEvt.timestamp <= gestureMaxAge;
+
+        const hasFreshDrawEnd =
+          drawEndEvt && now - drawEndEvt.timestamp <= gestureMaxAge;
+
+        if (!hasFreshGesturePosition && !hasFreshDrawStart && !hasFreshDrawEnd) {
+          allPresent = false;
+          break;
+        }
       }
- 
-      // Color: "*" accepts any detected color, array checks specific names
-      if (match.color && colorEvt) {
-        if (match.color !== "*" && !match.color.includes(colorEvt.payload.name)) continue;
-      }
- 
-      // All checks passed — stamp cooldown and fire intent
-      this._cooldowns.set(rule.id, now);
- 
-      return {
-        intent:  rule.intent,
-        trigger: (rule.requires ?? []).join(" + "),
-        // Attach raw payloads so the app can use them without parsing the buffer
-        ...(voiceEvt   && { voicePayload:   voiceEvt.payload }),
-        ...(colorEvt   && { colorPayload:   colorEvt.payload }),
-        ...(gestureEvt && { gesturePayload: gestureEvt.payload }),
-      };
     }
- 
-    return null;
+
+    if (!allPresent) continue;
+
+    // Check match conditions
+    const match = rule.match ?? {};
+
+    // Voice: command must be in the allowed list
+    if (match.voice) {
+      const cmd = voiceEvt?.payload?.command;
+      if (!cmd || !match.voice.includes(cmd)) continue;
+    }
+
+    // Gesture: supports direction, drawing state, pinch thresholds, and event type.
+    if (match.gesture) {
+      const gestureMatch = match.gesture;
+
+      // Match explicit gesture event: "position", "drawStart", or "drawEnd"
+      if (gestureMatch.event) {
+        if (gestureMatch.event === "position") {
+          if (!gestureEvt || now - gestureEvt.timestamp > gestureMaxAge) continue;
+        } else if (gestureMatch.event === "drawStart") {
+          if (!drawStartEvt || now - drawStartEvt.timestamp > gestureMaxAge) continue;
+        } else if (gestureMatch.event === "drawEnd") {
+          if (!drawEndEvt || now - drawEndEvt.timestamp > gestureMaxAge) continue;
+        } else {
+          continue;
+        }
+      }
+
+      // Direction requires a fresh position event.
+      if (gestureMatch.direction) {
+        if (!gestureEvt || now - gestureEvt.timestamp > gestureMaxAge) continue;
+
+        const x = gestureEvt.payload.x ?? 0.5;
+        const dir = x > 0.78 ? "right" : x < 0.22 ? "left" : "center";
+
+        if (dir !== gestureMatch.direction) continue;
+      }
+
+      // Drawing state requires a fresh position event.
+      if (typeof gestureMatch.drawing === "boolean") {
+        if (!gestureEvt || now - gestureEvt.timestamp > gestureMaxAge) continue;
+
+        const drawing = gestureEvt.payload.drawing === true;
+        if (drawing !== gestureMatch.drawing) continue;
+      }
+
+      // Pinch thresholds require a fresh position event.
+      if (typeof gestureMatch.pinchMax === "number") {
+        if (!gestureEvt || now - gestureEvt.timestamp > gestureMaxAge) continue;
+
+        const pinchDistance = gestureEvt.payload.pinchDistance ?? Infinity;
+        if (pinchDistance > gestureMatch.pinchMax) continue;
+      }
+
+      if (typeof gestureMatch.pinchMin === "number") {
+        if (!gestureEvt || now - gestureEvt.timestamp > gestureMaxAge) continue;
+
+        const pinchDistance = gestureEvt.payload.pinchDistance ?? Infinity;
+        if (pinchDistance < gestureMatch.pinchMin) continue;
+      }
+    }
+
+    // Color: "*" accepts any detected color, array checks specific names
+    if (match.color && colorEvt) {
+      if (match.color !== "*" && !match.color.includes(colorEvt.payload.name)) {
+        continue;
+      }
+    }
+
+    // All checks passed — stamp cooldown and fire intent
+    this._cooldowns.set(rule.id, now);
+
+    return {
+      intent:  rule.intent,
+      trigger: (rule.requires ?? []).join(" + "),
+
+      // Attach raw payloads so the app can use them without parsing the buffer
+      ...(voiceEvt     && { voicePayload:   voiceEvt.payload }),
+      ...(colorEvt     && { colorPayload:   colorEvt.payload }),
+      ...(gestureEvt   && { gesturePayload: gestureEvt.payload }),
+      ...(drawStartEvt && { drawStartPayload: drawStartEvt.payload }),
+      ...(drawEndEvt   && { drawEndPayload:   drawEndEvt.payload }),
+    };
   }
+
+  return null;
+}
 }
  
