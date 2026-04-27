@@ -3,7 +3,7 @@
 > Voice · Gesture · Color — fused in real time.
 > Built as an application-agnostic library: plug in any modality, define your own fusion logic.
 
-**Group 2** — Henri Kangas · Allizha Theiventhiram · Charalampos Filis · Boris Verdecia Echarte · Sandra Nikoloska
+**Group 2** — Henri Kangas · Allizha Theiventhiram · Charalampos Filis · Sandra Nikoloska
 
 ---
 
