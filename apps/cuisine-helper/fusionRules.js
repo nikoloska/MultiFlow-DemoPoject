@@ -6,78 +6,105 @@
  *
  * Every rule requires AT LEAST 2 modalities.
  *
- * Color note:
- *   "color" is only in requires[] for color-based rules.
- *   Navigation rules (NEXT/PREV/STOP) do NOT list "color",
- *   so a detected color never blocks gesture + voice navigation.
+ * Strict color-to-cuisine mapping:
+ *   blue   → french
+ *   red    → italian
+ *   white  → japanese
+ *   orange → mexican
+ *   yellow → greek
+ *
+ * Wrong color + correct cuisine = no action.
+ * No color shown + correct cuisine = no action (colorMaxAge: 1200ms).
+ *
+ * Navigation rules (NEXT/PREV/STOP) do NOT include "color" in requires[],
+ * so a detected color never blocks gesture + voice navigation.
  */
- 
+
 export const fusionConfig = [
   {
-    // Filter by cuisine: hold colored object + say cuisine name
-    id:       "filter_cuisine",
-    requires: ["color", "voice"],
-    match: {
-      color: "*",
-      voice: ["french", "italian", "japanese", "mexican", "greek"],
-    },
-    intent:   "FILTER_CUISINE",
-    cooldown: 800,
-    gestureMaxAge: 3000,
+    // blue + "french" → French cuisine
+    id:          "filter_french",
+    requires:    ["color", "voice"],
+    match:       { color: ["blue"],   voice: ["french"] },
+    intent:      "FILTER_CUISINE",
+    cooldown:    1000,
+    colorMaxAge: 1200,
   },
- 
   {
-    // Open recipe by color: color + say "open/cook" + point center
-    id:       "open_recipe",
-    requires: ["color", "voice", "gesture"],
+    // red + "italian" → Italian cuisine
+    id:          "filter_italian",
+    requires:    ["color", "voice"],
+    match:       { color: ["red"],    voice: ["italian"] },
+    intent:      "FILTER_CUISINE",
+    cooldown:    1000,
+    colorMaxAge: 1200,
+  },
+  {
+    // white + "japanese" → Japanese cuisine
+    id:          "filter_japanese",
+    requires:    ["color", "voice"],
+    match:       { color: ["white"],  voice: ["japanese"] },
+    intent:      "FILTER_CUISINE",
+    cooldown:    1000,
+    colorMaxAge: 1200,
+  },
+  {
+    // orange + "mexican" → Mexican cuisine
+    id:          "filter_mexican",
+    requires:    ["color", "voice"],
+    match:       { color: ["orange"], voice: ["mexican"] },
+    intent:      "FILTER_CUISINE",
+    cooldown:    1000,
+    colorMaxAge: 1200,
+  },
+  {
+    // yellow + "greek" → Greek cuisine
+    id:          "filter_greek",
+    requires:    ["color", "voice"],
+    match:       { color: ["yellow"], voice: ["greek"] },
+    intent:      "FILTER_CUISINE",
+    cooldown:    1000,
+    colorMaxAge: 1200,
+  },
+
+  {
+    // Specific color + "open/cook" + point center → open that recipe
+    id:          "open_recipe",
+    requires:    ["color", "voice", "gesture"],
     match: {
-      color:   "*",
+      color:   ["blue", "red", "white", "orange", "yellow"],
       voice:   ["open", "cook"],
       gesture: { direction: "center" },
     },
-    intent:   "OPEN_RECIPE",
-    cooldown: 800,
-    gestureMaxAge: 3000,
+    intent:      "OPEN_RECIPE",
+    cooldown:    1000,
+    colorMaxAge: 1200,
   },
- 
+
   {
-    // Advance step: say "next" AND swipe right
-    // "color" is NOT in requires — detected color never blocks this rule
+    // Say "next" AND swipe right → advance step
     id:       "next_step",
     requires: ["voice", "gesture"],
-    match: {
-      voice:   ["next"],
-      gesture: { direction: "right" },
-    },
+    match:    { voice: ["next"], gesture: { direction: "right" } },
     intent:   "NEXT_STEP",
-    cooldown: 800,
-    gestureMaxAge: 3000,
+    cooldown: 900,
   },
- 
+
   {
-    // Go back: say "previous/back" AND swipe left
+    // Say "previous/back" AND swipe left → go back
     id:       "prev_step",
     requires: ["voice", "gesture"],
-    match: {
-      voice:   ["previous", "back"],
-      gesture: { direction: "left" },
-    },
+    match:    { voice: ["previous", "back"], gesture: { direction: "left" } },
     intent:   "PREV_STEP",
-    cooldown: 800,
-    gestureMaxAge: 3000,
+    cooldown: 900,
   },
- 
+
   {
-    // Clear filter: say "stop" AND swipe left
+    // Say "stop" AND swipe left → clear filter
     id:       "stop",
     requires: ["voice", "gesture"],
-    match: {
-      voice:   ["stop"],
-      gesture: { direction: "left" },
-    },
+    match:    { voice: ["stop"], gesture: { direction: "left" } },
     intent:   "STOP",
-    cooldown: 800,
-    gestureMaxAge: 3000,
+    cooldown: 1000,
   },
 ];
- 
