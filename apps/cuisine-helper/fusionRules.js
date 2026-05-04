@@ -22,7 +22,8 @@ export const fusionConfig = [
       voice: ["french", "italian", "japanese", "mexican", "greek"],
     },
     intent:   "FILTER_CUISINE",
-    cooldown: 1000,
+    cooldown: 800,
+    gestureMaxAge: 3000,
   },
  
   {
@@ -35,7 +36,8 @@ export const fusionConfig = [
       gesture: { direction: "center" },
     },
     intent:   "OPEN_RECIPE",
-    cooldown: 1000,
+    cooldown: 800,
+    gestureMaxAge: 3000,
   },
  
   {
@@ -48,7 +50,8 @@ export const fusionConfig = [
       gesture: { direction: "right" },
     },
     intent:   "NEXT_STEP",
-    cooldown: 900,
+    cooldown: 800,
+    gestureMaxAge: 3000,
   },
  
   {
@@ -60,7 +63,8 @@ export const fusionConfig = [
       gesture: { direction: "left" },
     },
     intent:   "PREV_STEP",
-    cooldown: 900,
+    cooldown: 800,
+    gestureMaxAge: 3000,
   },
  
   {
@@ -72,7 +76,8 @@ export const fusionConfig = [
       gesture: { direction: "left" },
     },
     intent:   "STOP",
-    cooldown: 1000,
+    cooldown: 800,
+    gestureMaxAge: 3000,
   },
 ];
  

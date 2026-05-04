@@ -327,6 +327,9 @@ _evalConfig(rules, buffer) {
 
     // All checks passed — stamp cooldown and fire intent
     this._cooldowns.set(rule.id, now);
+    // Remove matched modality events from buffer (but keep color — it's long-lived)
+    const sourcesToClear = (rule.requires ?? []).filter(s => s !== "color");
+    this._buffer = this._buffer.filter(e => !sourcesToClear.includes(e.source));
 
     return {
       intent:  rule.intent,

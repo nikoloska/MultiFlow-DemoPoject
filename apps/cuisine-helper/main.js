@@ -97,7 +97,22 @@ const pending = {
   color: null,
   gesture: null,
 };
+// Prevent repeated navigation from duplicate speech/interim recognition events.
+/** 
+const intentCooldowns = new Map();
 
+function shouldBlockIntent(intent, cooldownMs = 1800) {
+  const now = Date.now();
+  const last = intentCooldowns.get(intent) ?? 0;
+
+  if (now - last < cooldownMs) {
+    return true;
+  }
+
+  intentCooldowns.set(intent, now);
+  return false;
+}
+**/
 // ─── 3. DOM Refs ──────────────────────────────────────────────────────────────
 const webcamVideo = document.getElementById("webcam-video");
 const recipeTitleEl = document.getElementById("recipe-title");
@@ -171,7 +186,7 @@ const gesture = new GestureModule({
   smoothing: 0.65,
   pinchStartThreshold: 0.07,
   pinchEndThreshold: 0.11,
-  maxJumpDistance: 0.16,
+  maxJumpDistance: 0.26,
   emitLandmarks: false,
 
   // Set to false after confirming everything works.
