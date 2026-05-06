@@ -21,6 +21,7 @@ export class CanvasRenderer {
     this._resize();
     window.addEventListener("resize", () => this._resize());
     this._fillBackground();
+    this.enableTrackpadDrawing();
   }
 
   // ─── Public API ───────────────────────────────────────────────────────────
@@ -151,7 +152,46 @@ endStroke() {
   setBrushType(type) {
     this._brushType = type;
   }
+/** Enable drawing directly with mouse / trackpad. */
+enableTrackpadDrawing() {
+  const canvas = this._canvas;
 
+  const getNormCoords = (event) => {
+    const rect = canvas.getBoundingClientRect();
+
+    return {
+      x: (event.clientX - rect.left) / rect.width,
+      y: (event.clientY - rect.top) / rect.height,
+    };
+  };
+
+  canvas.addEventListener("mousedown", (event) => {
+    const { x, y } = getNormCoords(event);
+
+    this.beginStroke();
+    this._isDrawing = true;
+    this.drawAt(x, y);
+  });
+
+  canvas.addEventListener("mousemove", (event) => {
+    if (!this._isDrawing) return;
+
+    const { x, y } = getNormCoords(event);
+    this.drawAt(x, y);
+  });
+
+  window.addEventListener("mouseup", () => {
+    if (!this._isDrawing) return;
+
+    this.endStroke();
+  });
+
+  canvas.addEventListener("mouseleave", () => {
+    if (!this._isDrawing) return;
+
+    this.endStroke();
+  });
+}
   // ─── Private ──────────────────────────────────────────────────────────────
 
   /**

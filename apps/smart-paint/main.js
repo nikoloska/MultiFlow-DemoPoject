@@ -266,6 +266,9 @@ document.getElementById("brush-eraser")?.addEventListener("click", () => {
 document.getElementById("brush-color")?.addEventListener("input", (e) => {
   canvas.setBrushColor(e.target.value);
 });
+document.getElementById("background-color")?.addEventListener("input", (e) => {
+  canvas.setBackground(e.target.value);
+});
 
 document.getElementById("brush-size")?.addEventListener("input", (e) => {
   const size = parseInt(e.target.value, 10);
